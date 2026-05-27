@@ -1,0 +1,36 @@
+services:
+  pg12:
+    image: postgres:12-alpine
+    ports: ["5412:5432"]
+    environment:
+      POSTGRES_DB: seedgen_test
+      POSTGRES_PASSWORD: test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seedgen_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pg15:
+    image: postgres:15-alpine
+    ports: ["5415:5432"]
+    environment:
+      POSTGRES_DB: seedgen_test
+      POSTGRES_PASSWORD: test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seedgen_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pg17:
+    image: postgres:17-alpine
+    ports: ["5417:5432"]
+    environment:
+      POSTGRES_DB: seedgen_test
+      POSTGRES_PASSWORD: test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d seedgen_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

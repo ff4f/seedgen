@@ -1,0 +1,97 @@
+# CodeRabbit Configuration for SeedGen
+# Docs: https://docs.coderabbit.ai/getting-started/yaml-configuration
+#
+# INSTALL DULU sebelum file ini berguna:
+# 1. Buka https://coderabbit.ai → Login with GitHub
+# 2. Authorize → pilih repo SeedGen
+# 3. Selesai. File ini otomatis dibaca oleh CodeRabbit.
+
+language: en
+
+reviews:
+  auto_review:
+    enabled: true
+    # Skip PR yang cuma chore/release
+    ignore_title_keywords:
+      - "chore"
+      - "release"
+    # Jangan review file non-code
+    path_filters:
+      - "!**/*.md"
+      - "!scenarios/*.yaml"
+      - "!.github/**"
+      - "!.gitignore"
+      - "!LICENSE"
+
+  # assertive = ketat review, cocok untuk project dengan strict invariants
+  profile: assertive
+
+  # Project-specific review rules per path
+  path_instructions:
+    - path: "src/**/*.rs"
+      instructions: |
+        This is a Rust project (SeedGen) with strict invariants. Review for:
+
+        CRITICAL (must block PR if violated):
+        1. DETERMINISM: Never use rand::thread_rng(), SystemTime::now() for randomness, or any non-deterministic source in library code. Only ChaCha8Rng seeded with u64 is allowed for all randomness.
+        2. NO UNWRAP: Never use .unwrap() or .expect() in src/ library code. Always propagate errors with ? operator. Only src/cli/ and src/main.rs may use anyhow.
+        3. SQL SAFETY: Never use format!() or string interpolation to build SQL values. Always use sqlx parameterized queries with bind().
+        4. NO CREDENTIALS: Never log, print, or include database connection URLs in error messages, tracing output, or MCP responses. Always redact.
+
+        IMPORTANT (should flag):
+        5. FK INTEGRITY: Generated FK values must always reference existing parent rows.
+        6. UNIQUE COMPLIANCE: UNIQUE columns must track seen values with HashSet + retry on collision.
+        7. Use tracing macros (info!, debug!, warn!, error!) — never println!() or eprintln!() in library code.
+        8. Imports ordered: std → external crates → internal modules, separated by blank lines.
+        9. Error types use thiserror with descriptive messages.
+        10. No Box<dyn Error> in library code — use typed errors.
+
+    - path: "src/generators/**/*.rs"
+      instructions: |
+        Generator-specific rules:
+        - All generators MUST accept &mut ChaCha8Rng (never thread_rng)
+        - All generators MUST return the Value enum
+        - Same seed MUST produce same output — determinism is non-negotiable
+        - Each generator MUST have unit tests proving determinism (generate twice with same seed, assert equal)
+
+    - path: "src/mcp/**/*.rs"
+      instructions: |
+        MCP server rules:
+        - NO AI/LLM logic inside the MCP server — pure deterministic tool execution only
+        - Production safety: REFUSE operations if database name contains "prod" or "production" (unless explicit override)
+        - Connection URLs MUST be redacted from ALL responses and error messages
+        - Timeout: 60 seconds per operation maximum
+        - Transport: stdio (default) or HTTP+SSE
+
+    - path: "src/resolver/**/*.rs"
+      instructions: |
+        Resolver rules:
+        - Topological sort uses Kahn's algorithm
+        - Self-referencing FKs must NOT create dependency edges
+        - Cycle detection uses DFS with coloring (white/gray/black)
+        - Cycles are resolved by breaking nullable or deferrable FK edges
+
+    - path: "src/output/**/*.rs"
+      instructions: |
+        Output rules:
+        - Batch size: 1000 rows per INSERT statement
+        - Wrap in transaction (BEGIN/COMMIT)
+        - SQL file output must include session_replication_role toggle
+        - NEVER hold all generated rows in memory — stream in batches
+
+    - path: "tests/**/*.rs"
+      instructions: |
+        Test rules:
+        - Test naming: test_<module>_<behavior> (e.g., test_resolver_handles_diamond_dependency)
+        - Clear arrange/act/assert structure
+        - Integration tests gated with #[cfg(feature = "integration")]
+        - Property-based tests gated with #[cfg(feature = "proptest")]
+
+  tools:
+    clippy:
+      enabled: true
+    shellcheck:
+      enabled: true
+
+chat:
+  auto_reply: true

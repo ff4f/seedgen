@@ -1,0 +1,22 @@
+# Built-in social network scenario.
+# 100 users with a long-tail posting pattern (most post little, a few post a lot),
+# likes on posts, follows between users, and direct messages.
+
+tables:
+  users:
+    count: 100
+
+  posts:
+    # 0..50 is a rough proxy for a power-law distribution. v0.2+ will support
+    # an explicit `distribution: power_law` to lean towards 0/low values.
+    count: per_parent(users, 0..50)
+
+  likes:
+    count: per_parent(posts, 0..100)
+
+  follows:
+    # ~30 follow rows per user on average (= 30% of users × 100 users).
+    count: 30% of users
+
+  messages:
+    count: per_parent(users, 0..20)

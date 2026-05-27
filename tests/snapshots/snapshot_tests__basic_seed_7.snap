@@ -1,0 +1,96 @@
+---
+source: tests/snapshot_tests.rs
+assertion_line: 109
+expression: "&data"
+---
+seed: 7
+rows_per_table: 5
+tables:
+  comments:
+    - content: Esse irure amet consectetur aliquip. Natus voluptate laboris sunt anim nostrud elit lorem accusantium. Sed sint exercitation beatae fugiat quis.
+      created_at: "2024-11-02T09:00:23"
+      id: 1
+      post_id: 1
+      user_id: 1
+    - content: Doloremque accusantium excepteur veritatis consectetur labore veritatis. Amet aperiam culpa est commodo sed. Est doloremque occaecat aute accusantium aute consequat. Culpa mollit reprehenderit minim aperiam amet reprehenderit laboris. Velit nulla beatae tempor culpa minim architecto fugiat ipsum labore ipsum.
+      created_at: "2024-05-19T22:46:18"
+      id: 2
+      post_id: 4
+      user_id: 2
+    - content: Voluptas lorem excepteur non irure anim aliqua doloremque adipiscing sint. Proident cillum labore lorem exercitation ex laboris beatae sint sint tempor non. Consectetur est reprehenderit excepteur pariatur voluptate beatae excepteur. Anim deserunt cillum esse esse aliqua cillum commodo inventore. Sed doloremque sit mollit dolore ex ex culpa.
+      created_at: "2024-11-28T13:01:33"
+      id: 3
+      post_id: 2
+      user_id: 2
+    - content: Ullamco consectetur sit excepteur totam veritatis beatae dolore culpa veniam nisi. Doloremque veritatis sint sed consequat architecto laborum. Deserunt accusantium laborum exercitation laborum sit exercitation.
+      created_at: "2025-03-17T00:49:20"
+      id: 4
+      post_id: 4
+      user_id: 5
+    - content: Excepteur non tempor exercitation excepteur proident. Proident aliquip voluptas qui excepteur amet enim voluptas quasi rerum. Duis irure aliquip aute sunt reprehenderit ipsum totam minim. Sunt culpa consequat dolor laboris fugiat anim voluptate eiusmod aperiam. Quasi enim mollit totam magna non est dolore magna laboris velit adipiscing.
+      created_at: "2025-08-25T12:21:17"
+      id: 5
+      post_id: 4
+      user_id: 5
+  posts:
+    - body: Duis nulla nisi aliqua vitae inventore voluptate esse voluptas. Voluptate laboris aperiam deserunt dolore nostrud cillum totam aliqua. Deserunt lorem laborum adipiscing quasi quis aliquip qui architecto do culpa.
+      id: 1
+      published_at: "2024-08-26T11:34:13"
+      slug: lorem-deserunt-totam
+      title: Lorem veritatis laboris labore ipsum.
+      user_id: 1
+    - body: Ex cillum labore tempor accusantium aliqua cupidatat officia eiusmod doloremque totam. Esse elit do labore veritatis qui esse beatae enim. Adipiscing nulla duis aliquip totam natus esse quasi culpa proident enim officia. Laborum totam esse voluptas reprehenderit ullamco do consectetur rerum cillum do cillum. Occaecat voluptate sunt eiusmod commodo elit amet voluptate aliquip irure exercitation minim.
+      id: 2
+      published_at: "2025-07-25T07:05:40"
+      slug: ipsum-accusantium-elit
+      title: Consequat velit cupidatat elit mollit deserunt dolor.
+      user_id: 4
+    - body: Lorem culpa aute enim consequat inventore aliqua anim sunt ullamco. Nisi exercitation rerum velit veritatis velit nulla esse inventore occaecat ex. Esse totam esse consequat est inventore rerum. Eiusmod nisi aperiam aute ex minim excepteur nulla.
+      id: 3
+      published_at: "2025-05-23T14:45:10"
+      slug: veritatis-magna-exercitation
+      title: Consequat do inventore quis pariatur labore exercitation quasi amet natus.
+      user_id: 3
+    - body: Anim nisi nostrud ipsum rerum vitae duis magna dolore non. Totam natus dolor architecto officia commodo. Aute laborum vitae reprehenderit incididunt excepteur consequat sint enim amet ex amet.
+      id: 4
+      published_at: "2025-07-19T02:36:58"
+      slug: ex-lorem-sed
+      title: Consequat irure reprehenderit accusantium sunt.
+      user_id: 2
+    - body: Voluptate proident nulla aperiam deserunt dolor elit amet inventore amet pariatur proident. Ullamco cupidatat officia aliqua accusantium sed beatae ex ex.
+      id: 5
+      published_at: "2024-02-23T13:06:03"
+      slug: duis-aperiam-nisi
+      title: Nulla officia duis cupidatat anim nostrud totam non quis pariatur rerum qui.
+      user_id: 2
+  users:
+    - bio: Consequat esse consectetur exercitation duis consectetur veniam reprehenderit. Consectetur eiusmod beatae culpa consequat ullamco voluptate duis consequat ex fugiat natus. Beatae quis occaecat tempor laboris inventore.
+      created_at: "2024-09-01T02:58:58"
+      email: beverly.nguyen@aol.com
+      id: 1
+      is_active: true
+      name: Jacob Stevens
+    - bio: Velit ullamco totam consectetur ullamco natus occaecat fugiat natus veniam cupidatat labore. Totam rerum quis nulla non sint tempor veritatis adipiscing do consequat.
+      created_at: "2025-01-09T13:30:16"
+      email: bruce.rose@example.com
+      id: 2
+      is_active: true
+      name: Alan Smith
+    - bio: Quis exercitation labore dolore veritatis cupidatat consequat totam doloremque ullamco. Nulla pariatur sed excepteur duis culpa voluptas culpa mollit officia architecto est. Commodo anim deserunt elit commodo est sit qui. Aute aliqua elit adipiscing architecto consequat deserunt totam. Nulla duis aliquip aute sed rerum architecto sunt ipsum.
+      created_at: "2025-04-27T04:24:24"
+      email: colin.simmons@duck.com
+      id: 3
+      is_active: true
+      name: Edith McDonald
+    - bio: Ipsum aliquip veniam officia sint dolor inventore reprehenderit nisi ex non. Anim amet enim eiusmod sunt cupidatat est minim aliquip.
+      created_at: "2024-01-25T17:13:22"
+      email: ingrid.elliott@example.com
+      id: 4
+      is_active: false
+      name: Fernando Kim
+    - bio: Labore est enim aperiam rerum exercitation ipsum minim ipsum rerum. Inventore laboris aute consectetur incididunt sit incididunt.
+      created_at: "2024-11-10T02:33:43"
+      email: derek.peters@msn.com
+      id: 5
+      is_active: true
+      name: Jerry Williams

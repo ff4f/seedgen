@@ -1,0 +1,13 @@
+# cargo-audit configuration.
+# Docs: https://docs.rs/cargo-audit/latest/cargo_audit/
+
+[advisories]
+# Advisories that appear in Cargo.lock but cannot affect our binary.
+#
+# RUSTSEC-2023-0071 (rsa Marvin Attack) is a transitive of sqlx-mysql.
+# We disable sqlx's default features and only enable "postgres", so
+# sqlx-mysql is never compiled into our binary (`cargo tree -p sqlx-mysql`
+# returns "nothing to print"). The entry remains in Cargo.lock because
+# sqlx-mysql is an optional feature of the sqlx crate.
+# Upstream: "No fixed upgrade is available!" — there is no version to bump to.
+ignore = ["RUSTSEC-2023-0071"]

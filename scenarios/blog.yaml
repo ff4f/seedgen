@@ -1,0 +1,31 @@
+# Built-in blog scenario.
+# 20 users (mostly authors), each with 0-15 posts, posts with 0-20 comments,
+# 30 tags, and 1-4 tags per post.
+
+tables:
+  users:
+    count: 20
+    overrides:
+      role:
+        distribution:
+          admin: 5%
+          editor: 15%
+          author: 80%
+
+  posts:
+    count: per_parent(users, 0..15)
+    overrides:
+      status:
+        distribution:
+          draft: 20%
+          published: 70%
+          archived: 10%
+
+  comments:
+    count: per_parent(posts, 0..20)
+
+  tags:
+    count: 30
+
+  post_tags:
+    count: per_parent(posts, 1..4)

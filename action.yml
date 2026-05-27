@@ -1,0 +1,143 @@
+name: 'SeedGen'
+description: 'Seed a PostgreSQL database with deterministic, constraint-safe fake data'
+author: 'ff4f'
+
+branding:
+  icon: 'database'
+  color: 'green'
+
+inputs:
+  database_url:
+    description: 'PostgreSQL connection URL (e.g. postgres://user:pass@host:5432/dbname).'
+    required: true
+
+  scenario:
+    description: 'Built-in scenario template: `ecommerce`, `saas`, `blog`, or `social`.'
+    required: false
+    default: ''
+
+  scenario_file:
+    description: 'Path to a custom YAML scenario file (relative to repo root).'
+    required: false
+    default: ''
+
+  seed:
+    description: 'RNG seed for deterministic output. Same seed = identical data every run.'
+    required: false
+    default: ''
+
+  rows:
+    description: 'Default rows per table when no scenario override applies.'
+    required: false
+    default: '10'
+
+  entities:
+    description: 'Per-table row count overrides, comma-separated (e.g. `users=100,orders=500`).'
+    required: false
+    default: ''
+
+  locale:
+    description: 'Locale for fake data (en, id, ja, de, fr).'
+    required: false
+    default: 'en'
+
+  fast:
+    description: 'Use the COPY protocol for faster inserts (boolean: true/false).'
+    required: false
+    default: 'false'
+
+  truncate_first:
+    description: 'TRUNCATE all target tables before inserting (boolean: true/false).'
+    required: false
+    default: 'false'
+
+  version:
+    description: 'SeedGen version to install (e.g. `v0.1.0`). Use `latest` for the most recent release.'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install SeedGen
+      shell: bash
+      env:
+        SEEDGEN_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        case "${RUNNER_OS}-${RUNNER_ARCH}" in
+          Linux-X64)   ARTIFACT="seedgen-linux-amd64" ;;
+          Linux-ARM64) ARTIFACT="seedgen-linux-arm64" ;;
+          macOS-X64)   ARTIFACT="seedgen-darwin-amd64" ;;
+          macOS-ARM64) ARTIFACT="seedgen-darwin-arm64" ;;
+          Windows-X64) ARTIFACT="seedgen-windows-amd64.exe" ;;
+          *)
+            echo "::error::Unsupported runner: ${RUNNER_OS}-${RUNNER_ARCH}"
+            exit 1
+            ;;
+        esac
+
+        if [ "$SEEDGEN_VERSION" = "latest" ]; then
+          URL="https://github.com/ff4f/seedgen/releases/latest/download/${ARTIFACT}"
+        else
+          URL="https://github.com/ff4f/seedgen/releases/download/${SEEDGEN_VERSION}/${ARTIFACT}"
+        fi
+
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          BIN_NAME="seedgen.exe"
+        else
+          BIN_NAME="seedgen"
+        fi
+
+        INSTALL_DIR="${RUNNER_TEMP}/seedgen-bin"
+        BIN_PATH="${INSTALL_DIR}/${BIN_NAME}"
+        mkdir -p "$INSTALL_DIR"
+
+        echo "Downloading ${ARTIFACT} (version: ${SEEDGEN_VERSION})"
+        curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+          --output "$BIN_PATH" "$URL"
+        chmod +x "$BIN_PATH"
+
+        echo "$INSTALL_DIR" >> "$GITHUB_PATH"
+        echo "::notice::SeedGen ${SEEDGEN_VERSION} installed"
+        "$BIN_PATH" --version
+
+    - name: Run seedgen generate
+      shell: bash
+      env:
+        SG_DB_URL: ${{ inputs.database_url }}
+        SG_SCENARIO: ${{ inputs.scenario }}
+        SG_SCENARIO_FILE: ${{ inputs.scenario_file }}
+        SG_SEED: ${{ inputs.seed }}
+        SG_ROWS: ${{ inputs.rows }}
+        SG_ENTITIES: ${{ inputs.entities }}
+        SG_LOCALE: ${{ inputs.locale }}
+        SG_FAST: ${{ inputs.fast }}
+        SG_TRUNCATE: ${{ inputs.truncate_first }}
+      run: |
+        set -euo pipefail
+
+        args=("generate" "--url" "$SG_DB_URL")
+        [ -n "$SG_SCENARIO" ]      && args+=("--scenario" "$SG_SCENARIO")
+        [ -n "$SG_SCENARIO_FILE" ] && args+=("--file" "$SG_SCENARIO_FILE")
+        [ -n "$SG_SEED" ]          && args+=("--seed" "$SG_SEED")
+        [ -n "$SG_ROWS" ]          && args+=("--rows" "$SG_ROWS")
+        [ -n "$SG_ENTITIES" ]      && args+=("--entities" "$SG_ENTITIES")
+        [ -n "$SG_LOCALE" ]        && args+=("--locale" "$SG_LOCALE")
+        [ "$SG_FAST" = "true" ]    && args+=("--fast")
+        [ "$SG_TRUNCATE" = "true" ] && args+=("--truncate-first")
+
+        # Echo parameters by name (never the full args, which include the URL with password).
+        echo "::group::seedgen parameters"
+        echo "  scenario:       ${SG_SCENARIO:-<none>}"
+        echo "  scenario_file:  ${SG_SCENARIO_FILE:-<none>}"
+        echo "  seed:           ${SG_SEED:-<time-based>}"
+        echo "  rows:           $SG_ROWS"
+        echo "  entities:       ${SG_ENTITIES:-<none>}"
+        echo "  locale:         $SG_LOCALE"
+        echo "  fast:           $SG_FAST"
+        echo "  truncate_first: $SG_TRUNCATE"
+        echo "::endgroup::"
+
+        seedgen "${args[@]}"

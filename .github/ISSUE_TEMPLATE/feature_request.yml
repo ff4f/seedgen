@@ -1,0 +1,75 @@
+name: Feature Request
+description: Suggest a new feature or enhancement
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature. The more concrete the proposal, the easier it is to discuss and implement.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence describing the feature.
+      placeholder: Add a `--locale id` flag for Indonesian fake data.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What problem does this solve? Who benefits and how?
+      placeholder: |
+        I work on apps for Indonesian users and need realistic-looking
+        Indonesian names, addresses, and phone numbers for testing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should the feature look like? Include CLI flags, YAML format, API surface — whatever's relevant.
+      placeholder: |
+        - Add `id` locale data to `src/generators/locale/`
+        - Wire `--locale id` flag to switch the pool at runtime
+        - Example: `seedgen generate --locale id --seed 42`
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you think about? Why aren't they enough?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: How big a change is this, roughly?
+      options:
+        - Small (new flag, generator, or scenario template)
+        - Medium (new module or output mode)
+        - Large (new database adapter, MCP feature, or architectural change)
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Links to similar features in other tools, prior art, related issues, anything that helps.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I have read the project's non-goals in CONCEPT.md and this fits the scope.
+          required: true

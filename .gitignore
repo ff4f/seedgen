@@ -1,0 +1,39 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock.bak
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Coverage
+/coverage/
+tarpaulin-report.html
+cobertura.xml
+lcov.info
+
+# Snapshots (pending review)
+**/*.snap.new
+
+# Criterion benchmarks
+/criterion/
+
+# Logs
+/logs/
+*.log
+
+# Claude
+.claude/settings.local.json

@@ -1,0 +1,111 @@
+name: Bug Report
+description: Report something that doesn't work as expected
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill out the form below — the more detail you give, the faster we can help.
+
+  - type: input
+    id: version
+    attributes:
+      label: SeedGen version
+      description: Output of `seedgen --version`.
+      placeholder: "seedgen 0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Install method
+      options:
+        - cargo install seedgen
+        - GitHub Release binary
+        - brew install seedgen
+        - Built from source
+        - Docker
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: When I run `seedgen generate --scenario ecommerce`, …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal commands or YAML to reproduce the issue. Use code fences.
+      placeholder: |
+        1. Apply this schema: `…`
+        2. Run: `seedgen generate --seed 42 --rows 10`
+        3. Observe: …
+    validations:
+      required: true
+
+  - type: input
+    id: postgres_version
+    attributes:
+      label: PostgreSQL version
+      description: Output of `SELECT version();`
+      placeholder: "PostgreSQL 16.2"
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Linux (x86_64)
+        - Linux (arm64)
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and error output
+      description: Run with `RUST_LOG=debug` or `SEEDGEN_LOG=debug` and paste relevant output. Redact any connection URLs.
+      render: shell
+
+  - type: textarea
+    id: schema
+    attributes:
+      label: Minimal schema (if relevant)
+      description: SQL that reproduces the issue. Strip anything sensitive.
+      render: sql
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Anything else that might help (related issues, workarounds tried, screenshots).
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I have redacted any connection URLs, passwords, or other secrets from this report.
+          required: true

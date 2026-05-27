@@ -1,0 +1,36 @@
+# Built-in SaaS scenario.
+# 10 organizations, each with 3-20 users, 1 subscription, and up to 12 invoices.
+# Role/plan/status distributions reflect typical B2B SaaS metrics.
+
+tables:
+  organizations:
+    count: 10
+
+  users:
+    count: per_parent(organizations, 3..20)
+    overrides:
+      role:
+        distribution:
+          owner: 10%
+          admin: 15%
+          member: 65%
+          viewer: 10%
+
+  subscriptions:
+    count: per_parent(organizations, 1..1)
+    overrides:
+      plan:
+        distribution:
+          free: 30%
+          pro: 50%
+          enterprise: 20%
+
+  invoices:
+    count: per_parent(subscriptions, 1..12)
+    overrides:
+      status:
+        distribution:
+          paid: 80%
+          pending: 10%
+          overdue: 5%
+          failed: 5%

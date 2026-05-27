@@ -1,0 +1,154 @@
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use anyhow::Context;
+use sqlx::PgPool;
+
+use crate::scenario::{
+    load_template, parse_scenario, CountExpression, ScenarioConfig, TableScenario,
+};
+use crate::{generate as run_generate, GenerateConfig, OutputMode};
+
+#[derive(Debug)]
+pub struct Args {
+    pub seed: Option<u64>,
+    pub rows: usize,
+    pub scenario: Option<String>,
+    pub file: Option<String>,
+    pub entities: Option<HashMap<String, usize>>,
+    pub output: Option<String>,
+    pub format: String,
+    pub fast: bool,
+    pub dry_run: bool,
+    pub locale: String,
+    pub include: Option<Vec<String>>,
+    pub exclude: Option<Vec<String>>,
+    pub truncate_first: bool,
+}
+
+pub async fn run(args: Args, url: &str) -> anyhow::Result<()> {
+    let output_mode = match (&args.output, args.format.as_str()) {
+        (None, _) => OutputMode::DirectInsert,
+        (Some(path), "json") => OutputMode::Json(PathBuf::from(path)),
+        (Some(path), "sql") => OutputMode::SqlFile(PathBuf::from(path)),
+        (Some(path), "copy") => OutputMode::SqlFile(PathBuf::from(path)),
+        (Some(_), other) => {
+            anyhow::bail!("unknown --format `{other}` (expected sql/json/copy)");
+        }
+    };
+
+    if args.fast {
+        eprintln!("warning: --fast (COPY protocol) not yet implemented; using batch INSERT");
+    }
+    if args.locale != "en" {
+        eprintln!(
+            "warning: --locale `{}` not yet implemented; using en",
+            args.locale
+        );
+    }
+
+    let mut scenario = resolve_scenario(args.scenario.as_deref(), args.file.as_deref())?;
+
+    if let Some(entities) = args.entities {
+        scenario = Some(merge_entities(scenario, entities));
+    }
+
+    // Precedence: --seed > scenario.seed > time-based.
+    let seed = args
+        .seed
+        .or_else(|| scenario.as_ref().and_then(|s| s.seed))
+        .unwrap_or_else(time_seed);
+
+    let config = GenerateConfig {
+        seed,
+        rows_per_table: args.rows,
+        scenario,
+        output_mode,
+        include_tables: args.include,
+        exclude_tables: args.exclude,
+        truncate_first: args.truncate_first,
+    };
+
+    if args.dry_run {
+        println!("Dry run — seed={seed} rows={}", args.rows);
+        if let Some(scenario) = &config.scenario {
+            println!("  scenario tables: {}", scenario.tables.len());
+            for (t, ts) in &scenario.tables {
+                println!("    {t}: {:?}", ts.count);
+            }
+        }
+        if let Some(inc) = &config.include_tables {
+            println!("  include: {}", inc.join(", "));
+        }
+        if let Some(exc) = &config.exclude_tables {
+            println!("  exclude: {}", exc.join(", "));
+        }
+        return Ok(());
+    }
+
+    let pool = PgPool::connect(url)
+        .await
+        .context("failed to connect to database")?;
+    let result = run_generate(&pool, &config).await?;
+
+    println!(
+        "Generated {} rows across {} tables in {:?} (seed: {})",
+        result.total_rows,
+        result.tables_seeded.len(),
+        result.duration,
+        result.seed_used,
+    );
+    for t in &result.tables_seeded {
+        println!(
+            "  {:<30} {:>6} rows  [{:?}]",
+            t.name, t.rows_inserted, t.duration
+        );
+    }
+    Ok(())
+}
+
+fn resolve_scenario(
+    name: Option<&str>,
+    file: Option<&str>,
+) -> anyhow::Result<Option<ScenarioConfig>> {
+    match (name, file) {
+        (Some(_), Some(_)) => {
+            anyhow::bail!("--scenario and -f are mutually exclusive")
+        }
+        (Some(name), None) => Ok(Some(load_template(name).map_err(anyhow::Error::from)?)),
+        (None, Some(path)) => {
+            let yaml = std::fs::read_to_string(path)
+                .with_context(|| format!("failed to read scenario file `{path}`"))?;
+            Ok(Some(parse_scenario(&yaml).map_err(anyhow::Error::from)?))
+        }
+        (None, None) => Ok(None),
+    }
+}
+
+fn merge_entities(
+    base: Option<ScenarioConfig>,
+    entities: HashMap<String, usize>,
+) -> ScenarioConfig {
+    let mut cfg = base.unwrap_or(ScenarioConfig {
+        seed: None,
+        tables: HashMap::new(),
+    });
+    for (name, count) in entities {
+        cfg.tables
+            .entry(name)
+            .and_modify(|ts| ts.count = CountExpression::Fixed(count))
+            .or_insert(TableScenario {
+                count: CountExpression::Fixed(count),
+                overrides: HashMap::new(),
+            });
+    }
+    cfg
+}
+
+fn time_seed() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(42)
+}

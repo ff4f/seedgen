@@ -1,0 +1,70 @@
+[package]
+name = "seedgen"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT"
+description = "Zero-config database seed data generator with deterministic, constraint-safe fake data"
+repository = "https://github.com/ff4f/seedgen"
+homepage = "https://github.com/ff4f/seedgen"
+documentation = "https://docs.rs/seedgen"
+readme = "README.md"
+keywords = ["database", "postgresql", "seed", "testing", "fake-data"]
+categories = ["database", "command-line-utilities", "development-tools::testing"]
+
+[dependencies]
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono", "json"] }
+uuid = { version = "1", features = ["v4"] }
+clap = { version = "4", features = ["derive", "env"] }
+clap_complete = "4"
+rand = "0.8"
+rand_chacha = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+petgraph = "0.6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+indicatif = "0.17"
+thiserror = "2"
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+
+[dev-dependencies]
+insta = { version = "1", features = ["yaml"] }
+proptest = "1"
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[features]
+default = []
+integration = []
+proptest = []
+
+[lib]
+name = "seedgen"
+path = "src/lib.rs"
+
+[[bin]]
+name = "seedgen"
+path = "src/main.rs"
+
+[[test]]
+name = "introspect"
+path = "tests/integration/introspect_test.rs"
+
+[[test]]
+name = "resolve"
+path = "tests/integration/resolve_test.rs"
+
+[[test]]
+name = "output"
+path = "tests/integration/output_test.rs"
+
+[[test]]
+name = "property"
+path = "tests/integration/property_tests.rs"
+
+[[bench]]
+name = "generate_bench"
+harness = false

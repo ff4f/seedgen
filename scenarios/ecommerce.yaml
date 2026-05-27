@@ -1,0 +1,44 @@
+# Built-in e-commerce scenario.
+# Small but realistic dataset: ~50 users, 200 products, ~250 orders,
+# ~750 order items, ~500 reviews.
+
+tables:
+  users:
+    count: 50
+
+  categories:
+    count: 15
+
+  products:
+    count: 200
+    overrides:
+      price:
+        range: [4.99, 499.99]
+
+  orders:
+    count: per_parent(users, 0..10)
+    overrides:
+      status:
+        distribution:
+          pending: 5%
+          paid: 60%
+          shipped: 20%
+          delivered: 10%
+          cancelled: 5%
+
+  order_items:
+    count: per_parent(orders, 1..5)
+    overrides:
+      quantity:
+        range: [1, 4]
+
+  reviews:
+    count: per_parent(products, 0..5)
+    overrides:
+      rating:
+        distribution:
+          "1": 5%
+          "2": 5%
+          "3": 15%
+          "4": 35%
+          "5": 40%

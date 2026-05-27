@@ -1,0 +1,96 @@
+---
+source: tests/snapshot_tests.rs
+assertion_line: 101
+expression: "&data"
+---
+seed: 42
+rows_per_table: 5
+tables:
+  comments:
+    - content: Exercitation elit pariatur culpa cillum sint exercitation anim. Laboris sit consectetur magna culpa. Duis exercitation rerum exercitation amet aute fugiat proident. Officia dolore duis aliquip deserunt deserunt inventore architecto est esse. Aliqua dolor beatae fugiat minim duis doloremque aperiam.
+      created_at: "2025-10-25T04:23:51"
+      id: 1
+      post_id: 4
+      user_id: 1
+    - content: Anim qui lorem aute tempor non sunt aliquip dolore quis dolor. Inventore veritatis eiusmod cupidatat nulla voluptas rerum. Labore pariatur natus minim amet culpa vitae mollit nisi mollit elit. Pariatur aliquip ex exercitation voluptas veritatis. Reprehenderit cupidatat cillum magna voluptas inventore ipsum ullamco.
+      created_at: "2024-08-22T12:01:48"
+      id: 2
+      post_id: 1
+      user_id: 5
+    - content: Nostrud irure proident deserunt beatae architecto accusantium. Voluptate dolore sint accusantium totam adipiscing ipsum quasi consectetur dolore commodo excepteur.
+      created_at: "2024-01-31T10:11:36"
+      id: 3
+      post_id: 1
+      user_id: 2
+    - content: Adipiscing dolor labore occaecat voluptate excepteur pariatur rerum cillum do ex. Voluptate proident rerum occaecat doloremque enim voluptas lorem. Dolor veritatis labore architecto excepteur qui voluptate.
+      created_at: "2025-05-16T06:29:01"
+      id: 4
+      post_id: 1
+      user_id: 2
+    - content: Sit excepteur aperiam ex enim incididunt nulla laborum. Aperiam reprehenderit do incididunt dolore aliqua cupidatat consectetur anim dolore esse. Qui voluptate voluptas architecto cillum minim fugiat. Sed anim aliqua accusantium velit pariatur amet. Labore exercitation eiusmod non non vitae aute sint quis inventore ipsum fugiat.
+      created_at: "2024-04-12T00:41:55"
+      id: 5
+      post_id: 3
+      user_id: 4
+  posts:
+    - body: Magna irure lorem velit eiusmod magna deserunt sit labore. Laboris ex veniam amet consequat eiusmod dolore velit non consectetur. Officia sunt nisi non velit consectetur ipsum. Lorem anim sit non accusantium esse pariatur vitae nulla consectetur non tempor. Dolore tempor labore anim dolore laborum inventore vitae voluptas.
+      id: 1
+      published_at: "2025-08-17T14:51:23"
+      slug: laborum-mollit-officia
+      title: Pariatur duis non ullamco officia sunt pariatur veritatis aliquip.
+      user_id: 4
+    - body: Dolore labore cupidatat labore aliquip culpa duis excepteur ipsum velit. Aute natus culpa eiusmod quasi quasi lorem proident deserunt aliqua. Totam do adipiscing mollit quis sit cupidatat doloremque nulla excepteur ex fugiat. Velit reprehenderit accusantium voluptate fugiat dolore. Ipsum consectetur commodo eiusmod tempor aliquip est.
+      id: 2
+      published_at: "2025-05-14T15:27:27"
+      slug: laboris-veritatis-quasi
+      title: Duis voluptate nulla excepteur enim beatae cillum fugiat quasi rerum amet.
+      user_id: 2
+    - body: Sint eiusmod officia sed aliqua elit duis exercitation ullamco velit sit reprehenderit. Nulla sit doloremque doloremque officia beatae quis sint do beatae. Aliqua nulla cupidatat rerum pariatur proident totam cupidatat lorem inventore. Esse rerum dolor aute natus adipiscing commodo tempor consequat consequat deserunt.
+      id: 3
+      published_at: "2025-08-22T23:37:58"
+      slug: veniam-officia-occaecat
+      title: Mollit consequat esse elit officia labore velit consectetur dolore laborum.
+      user_id: 4
+    - body: Aliquip aute rerum accusantium aliquip. Ex sint voluptas irure quis.
+      id: 4
+      published_at: "2025-08-08T19:37:37"
+      slug: nisi-qui-sed
+      title: Quis voluptas exercitation eiusmod velit cillum.
+      user_id: 4
+    - body: Accusantium architecto consequat architecto quis exercitation vitae voluptas enim. Rerum beatae accusantium elit aliqua do consequat culpa consequat. Nisi est incididunt consequat occaecat laboris. Dolor nostrud deserunt occaecat velit totam excepteur adipiscing cupidatat commodo sit ipsum.
+      id: 5
+      published_at: "2024-10-12T06:41:52"
+      slug: beatae-vitae-aliqua
+      title: Eiusmod laborum sint dolore natus doloremque velit voluptas natus magna non.
+      user_id: 3
+  users:
+    - bio: Anim aliqua aperiam architecto officia incididunt consectetur exercitation culpa consectetur minim. Proident sunt proident magna culpa consequat amet non anim natus aute. Do aute doloremque dolor incididunt aliqua.
+      created_at: "2025-03-17T12:22:11"
+      email: ian.armstrong@fastmail.com
+      id: 1
+      is_active: true
+      name: Greg Cook
+    - bio: Elit enim velit dolor voluptas laborum duis reprehenderit aliquip nisi aliqua. Consectetur aute natus do duis esse deserunt aperiam consequat veniam. Aute sint accusantium exercitation excepteur laborum excepteur.
+      created_at: "2024-10-16T12:40:28"
+      email: john.myers@mail.com
+      id: 2
+      is_active: false
+      name: Katelyn Hart
+    - bio: Dolor exercitation aliquip enim sunt incididunt elit. Reprehenderit esse proident nostrud nulla doloremque irure culpa magna proident beatae doloremque. Excepteur officia sint fugiat sint architecto enim. Anim est enim ex ex minim sit.
+      created_at: "2025-09-15T15:20:31"
+      email: jordan.stevens@protonmail.com
+      id: 3
+      is_active: true
+      name: Duncan Weaver
+    - bio: Natus labore occaecat laboris proident doloremque velit incididunt quis. Ex do tempor cupidatat esse rerum dolor. Totam cupidatat sit accusantium eiusmod elit occaecat accusantium tempor.
+      created_at: "2025-09-24T15:36:35"
+      email: anthony.harrison@icloud.com
+      id: 4
+      is_active: false
+      name: Alan Gonzalez
+    - bio: Natus quis commodo irure vitae. Veniam irure nisi veniam architecto nostrud. Veritatis beatae architecto mollit duis duis veritatis esse rerum ipsum. Proident totam aute enim duis quasi sint aliqua velit aliquip. Doloremque voluptate culpa ipsum esse officia amet non rerum.
+      created_at: "2024-06-17T06:19:45"
+      email: christina.payne@hotmail.com
+      id: 5
+      is_active: true
+      name: Edward Lee

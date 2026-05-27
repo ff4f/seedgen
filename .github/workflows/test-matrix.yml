@@ -1,0 +1,46 @@
+name: Test Matrix
+
+# "push to main" here is NOT a direct push — main is branch-protected, so this
+# fires when a PR is merged. The weekly schedule catches drift in transitive
+# dependencies (cargo audit advisories, sqlx behavior changes, etc.).
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (PG ${{ matrix.pg_version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg_version: [12, 13, 14, 15, 16, 17]
+    services:
+      postgres:
+        image: postgres:${{ matrix.pg_version }}
+        env:
+          POSTGRES_DB: seedgen_test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo test --all-features
+        run: cargo test --all-features
+        env:
+          DATABASE_URL: postgres://test:test@localhost:5432/seedgen_test
