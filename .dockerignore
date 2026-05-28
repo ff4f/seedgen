@@ -1,0 +1,15 @@
+target/
+.git/
+.github/
+.claude/
+.cargo/
+.vscode/
+.idea/
+.DS_Store
+*.log
+logs/
+examples/
+*.md
+!README.md
+LICENSE
+docker-compose.yml

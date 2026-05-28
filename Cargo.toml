@@ -2,7 +2,7 @@
 name = "seedgen"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.88"
 license = "MIT"
 description = "Zero-config database seed data generator with deterministic, constraint-safe fake data"
 repository = "https://github.com/ff4f/seedgen"
