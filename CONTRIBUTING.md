@@ -8,7 +8,7 @@ Thank you for considering contributing to SeedGen! This guide covers everything 
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/YOUR_USERNAME/seedgen.git
+git clone https://github.com/ff4f/seedgen.git
 cd seedgen
 
 # 2. Install Rust (if not already)
@@ -119,52 +119,52 @@ Open an issue with:
 
 ### Submitting Code (Fork-based Workflow)
 
-Semua kontribusi code dilakukan melalui Pull Request. Tidak ada push langsung ke `main`.
+All code contributions go through Pull Requests. No direct pushes to `main`.
 
-**Langkah-langkah:**
+**Steps:**
 
-1. **Fork** repo ini ke akun GitHub kamu
-2. **Clone** fork kamu:
+1. **Fork** this repo to your GitHub account
+2. **Clone** your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/seedgen.git
+   git clone https://github.com/ff4f/seedgen.git
    cd seedgen
    ```
-3. **Buat branch baru** dari `main`:
+3. **Create a new branch** from `main`:
    ```bash
    git checkout -b feat/my-feature
-   # atau: git checkout -b fix/my-bug
+   # or: git checkout -b fix/my-bug
    ```
-4. **Develop** — tulis code + tests
-5. **Pastikan semua check lolos:**
+4. **Develop** — write code + tests
+5. **Make sure all checks pass:**
    ```bash
    cargo fmt                        # Format code
    cargo clippy -- -D warnings      # Lint — zero warnings
-   cargo test --all-features        # Semua tests pass
+   cargo test --all-features        # All tests pass
    ```
-6. **Commit** menggunakan conventional commits (lihat section di bawah)
-7. **Push** ke fork kamu:
+6. **Commit** using conventional commits (see section below)
+7. **Push** to your fork:
    ```bash
    git push origin feat/my-feature
    ```
-8. **Buat Pull Request** ke `main` di repo utama
-9. **Tunggu automated review:**
-   - GitHub Actions CI akan jalan otomatis (test, lint, security audit)
-   - **CodeRabbit AI** akan review code kamu dalam 2-5 menit dan kasih feedback
-   - Fix feedback dari CI dan CodeRabbit kalau ada
-10. **Maintainer review** — maintainer akan review manual dan approve/minta revisi
-11. **Merge** — setelah approved, PR akan di-squash merge ke `main`
+8. **Open a Pull Request** against `main` in the upstream repo
+9. **Wait for automated review:**
+   - GitHub Actions CI will run automatically (test, lint, security audit)
+   - **CodeRabbit AI** will review your code within 2-5 minutes and leave feedback
+   - Address feedback from CI and CodeRabbit if any
+10. **Maintainer review** — a maintainer will review manually and approve or request changes
+11. **Merge** — once approved, the PR will be squash-merged into `main`
 
-### Tentang CodeRabbit (AI Code Review)
+### About CodeRabbit (AI Code Review)
 
-Repo ini menggunakan [CodeRabbit](https://coderabbit.ai) untuk automated AI code review. Setiap PR yang kamu buat akan otomatis di-review oleh CodeRabbit. Kamu akan melihat:
+This repo uses [CodeRabbit](https://coderabbit.ai) for automated AI code review. Every PR you open is reviewed automatically by CodeRabbit. You'll see:
 
-- **PR Summary** — rangkuman otomatis tentang perubahan kamu
-- **Line comments** — saran perbaikan per baris code
-- **Project-specific checks** — CodeRabbit akan cek apakah code kamu mengikuti rules SeedGen (determinism, no unwrap, parameterized SQL, dll)
+- **PR Summary** — an automatic summary of your changes
+- **Line comments** — per-line suggestions
+- **Project-specific checks** — CodeRabbit verifies your code follows SeedGen rules (determinism, no unwrap, parameterized SQL, etc.)
 
-Kamu bisa **reply langsung** ke comment CodeRabbit untuk diskusi atau minta penjelasan. CodeRabbit akan merespon.
+You can **reply directly** to CodeRabbit comments to discuss or ask for clarification. CodeRabbit will respond.
 
-**Penting:** CodeRabbit adalah assistant, bukan pengganti maintainer. Review final tetap dilakukan oleh maintainer (manusia).
+**Important:** CodeRabbit is an assistant, not a replacement for maintainers. Final review is still done by a (human) maintainer.
 
 ---
 
@@ -266,7 +266,7 @@ ci: add PG 17 to test matrix
 1. PR title follows conventional commit format
 2. PR description explains WHY, not just WHAT
 3. All CI checks pass (lint, test, security audit)
-4. CodeRabbit AI review feedback addressed (fix atau reply dengan alasan)
+4. CodeRabbit AI review feedback addressed (fix it or reply with a justification)
 5. At least one approval from maintainer
 6. No unresolved conversations
 7. Squash merge into main
