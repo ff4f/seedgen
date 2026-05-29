@@ -1,21 +1,21 @@
 # CodeRabbit Configuration for SeedGen
 # Docs: https://docs.coderabbit.ai/getting-started/yaml-configuration
 #
-# INSTALL DULU sebelum file ini berguna:
-# 1. Buka https://coderabbit.ai → Login with GitHub
-# 2. Authorize → pilih repo SeedGen
-# 3. Selesai. File ini otomatis dibaca oleh CodeRabbit.
+# INSTALL FIRST before this file does anything:
+# 1. Open https://coderabbit.ai → Login with GitHub
+# 2. Authorize → select the SeedGen repo
+# 3. Done. This file is picked up automatically by CodeRabbit.
 
 language: en
 
 reviews:
   auto_review:
     enabled: true
-    # Skip PR yang cuma chore/release
+    # Skip chore/release-only PRs
     ignore_title_keywords:
       - "chore"
       - "release"
-    # Jangan review file non-code
+    # Don't review non-code files
     path_filters:
       - "!**/*.md"
       - "!scenarios/*.yaml"
@@ -23,7 +23,7 @@ reviews:
       - "!.gitignore"
       - "!LICENSE"
 
-  # assertive = ketat review, cocok untuk project dengan strict invariants
+  # assertive = strict review, suitable for a project with strict invariants
   profile: assertive
 
   # Project-specific review rules per path
