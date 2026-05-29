@@ -417,19 +417,18 @@ mod tests {
         assert!(err.1.contains("prod"));
     }
 
+    // Combined into one sequential test because both touch DATABASE_URL,
+    // which is process-wide. Running them in parallel races on the env var.
     #[tokio::test]
-    async fn test_resolve_url_falls_back_to_env() {
+    async fn test_resolve_url_env_handling() {
+        std::env::remove_var("DATABASE_URL");
+        let err = resolve_url(&json!({})).unwrap_err();
+        assert_eq!(err.0, INVALID_PARAMS);
+
         std::env::set_var("DATABASE_URL", "postgres://test/test");
         let url = resolve_url(&json!({})).unwrap();
         assert_eq!(url, "postgres://test/test");
         std::env::remove_var("DATABASE_URL");
-    }
-
-    #[tokio::test]
-    async fn test_resolve_url_missing_errors() {
-        std::env::remove_var("DATABASE_URL");
-        let err = resolve_url(&json!({})).unwrap_err();
-        assert_eq!(err.0, INVALID_PARAMS);
     }
 
     #[test]
