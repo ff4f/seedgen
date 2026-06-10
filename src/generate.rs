@@ -112,6 +112,31 @@ pub async fn generate(
     let schema = introspect(pool).await?;
     let plan = resolve(&schema)?;
 
+    // Lifecycle mode: if the scenario declared a `lifecycle:` block, hand off to
+    // the lifecycle engine. Otherwise fall through to the standard flow below.
+    if let Some(lifecycle) = config.scenario.as_ref().and_then(|s| s.lifecycle.clone()) {
+        let table_lifecycles = config
+            .scenario
+            .as_ref()
+            .map(|s| s.table_lifecycles.clone())
+            .unwrap_or_default();
+
+        if config.truncate_first {
+            let targets: Vec<String> = plan
+                .ordered_tables
+                .iter()
+                .filter(|t| table_lifecycles.contains_key(*t) && should_include_table(t, config))
+                .cloned()
+                .collect();
+            if !targets.is_empty() {
+                truncate_tables(pool, &targets).await?;
+            }
+        }
+
+        let engine = crate::lifecycle::LifecycleEngine::new(lifecycle, table_lifecycles);
+        return engine.execute(&schema, &plan, config, pool).await;
+    }
+
     let selected: Vec<String> = plan
         .ordered_tables
         .iter()
@@ -125,6 +150,7 @@ pub async fn generate(
 
     let mut rng = ChaCha8Rng::seed_from_u64(config.seed);
     let mut generated_ids: HashMap<String, Vec<Value>> = HashMap::new();
+    let mut unique_states: HashMap<String, UniqueState> = HashMap::new();
     let mut table_results = Vec::with_capacity(selected.len());
     let mut total_rows = 0usize;
 
@@ -149,6 +175,7 @@ pub async fn generate(
             &plan.deferred_updates,
             &mut rng,
             &mut generated_ids,
+            &mut unique_states,
             &config.output_mode,
         )
         .await?;
@@ -255,8 +282,10 @@ async fn truncate_tables(pool: &PgPool, tables: &[String]) -> Result<(), Generat
     Ok(())
 }
 
+/// Generate and emit one table's rows. Used by both the standard `generate`
+/// flow and the lifecycle engine (which calls it once per bucket).
 #[allow(clippy::too_many_arguments)]
-async fn generate_table(
+pub(crate) async fn generate_table(
     pool: &PgPool,
     schema: &SchemaGraph,
     table: &Table,
@@ -264,6 +293,11 @@ async fn generate_table(
     deferred: &[DeferredUpdate],
     rng: &mut ChaCha8Rng,
     generated_ids: &mut HashMap<String, Vec<Value>>,
+    // Per-table UNIQUE tracking, keyed by table name. The standard flow passes a
+    // fresh map (one call per table); the lifecycle engine reuses the same map
+    // across buckets so uniqueness holds over the whole table, not just one
+    // bucket. See `init_unique_state`.
+    unique_states: &mut HashMap<String, UniqueState>,
     output: &OutputMode,
 ) -> Result<GenerateOutcome, GenerateError> {
     if row_count == 0 {
@@ -284,11 +318,13 @@ async fn generate_table(
         });
     }
 
-    let mut unique_state = init_unique_state(table, &plan);
+    let unique_state = unique_states
+        .entry(table.name.clone())
+        .or_insert_with(|| init_unique_state(table, &plan));
 
     let mut rows: Vec<Vec<Value>> = Vec::with_capacity(row_count);
     for i in 0..row_count {
-        let row = generate_row(table, &plan, &mut unique_state, generated_ids, i, rng)?;
+        let row = generate_row(table, &plan, unique_state, generated_ids, i, rng)?;
         rows.push(row);
     }
 
@@ -322,9 +358,9 @@ async fn generate_table(
     }
 }
 
-struct GenerateOutcome {
-    inserted: usize,
-    sql: Option<String>,
+pub(crate) struct GenerateOutcome {
+    pub(crate) inserted: usize,
+    pub(crate) sql: Option<String>,
 }
 
 struct ColumnPlan<'a> {
@@ -425,7 +461,7 @@ fn find_fk<'a>(schema: &'a SchemaGraph, table: &str, column: &str) -> Option<&'a
         .find(|fk| fk.from_table == table && fk.from_column == column)
 }
 
-struct UniqueState {
+pub(crate) struct UniqueState {
     /// Indexed by column position within `ColumnPlan::included`.
     handlers: HashMap<usize, ConstraintHandler>,
 }
@@ -784,7 +820,11 @@ mod tests {
         );
         let c = GenerateConfig {
             rows_per_table: 10,
-            scenario: Some(ScenarioConfig { seed: None, tables }),
+            scenario: Some(ScenarioConfig {
+                seed: None,
+                tables,
+                ..Default::default()
+            }),
             ..GenerateConfig::default()
         };
         let empty = HashMap::new();
@@ -809,7 +849,11 @@ mod tests {
         );
         let c = GenerateConfig {
             rows_per_table: 1,
-            scenario: Some(ScenarioConfig { seed: None, tables }),
+            scenario: Some(ScenarioConfig {
+                seed: None,
+                tables,
+                ..Default::default()
+            }),
             ..GenerateConfig::default()
         };
         // 10 users * avg(2,8) = 10 * 5 = 50 orders
@@ -834,7 +878,11 @@ mod tests {
         );
         let c = GenerateConfig {
             rows_per_table: 1,
-            scenario: Some(ScenarioConfig { seed: None, tables }),
+            scenario: Some(ScenarioConfig {
+                seed: None,
+                tables,
+                ..Default::default()
+            }),
             ..GenerateConfig::default()
         };
         let mut ids = HashMap::new();

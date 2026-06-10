@@ -313,10 +313,7 @@ fn merge_entities(
     base: Option<ScenarioConfig>,
     entities: HashMap<String, usize>,
 ) -> ScenarioConfig {
-    let mut cfg = base.unwrap_or(ScenarioConfig {
-        seed: None,
-        tables: HashMap::new(),
-    });
+    let mut cfg = base.unwrap_or_default();
     for (name, count) in entities {
         cfg.tables
             .entry(name)

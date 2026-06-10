@@ -8,6 +8,74 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 Nothing yet.
 
+## [0.2.0] - 2026-06-11
+
+Lifecycle simulation (time-travel generation): an additive, opt-in layer that
+makes generated data evolve over time — growth curves, churn, seasonality, and
+temporal consistency between parent and child rows — instead of flat random
+timestamps. Active only when a scenario declares a `lifecycle:` block; without
+it, behavior is identical to v0.1.x.
+
+### Added
+
+- **Lifecycle simulation (time-travel generation)** — a new `src/lifecycle/`
+  module that runs bucket-by-bucket over a time window, wrapping the existing
+  generation core (one `generate_table` call per bucket) rather than replacing
+  it. Enabled via a top-level `lifecycle: { start, end, bucket }` block
+  (`bucket`: `day` | `week` | `month` | `quarter`).
+- **Growth models** — `linear`, `exponential`, `s_curve`, `logistic`, and
+  `custom` (explicit per-bucket counts), plus `follows` (count proportional to a
+  parent's active rows, via `ratio` or `per_parent` with optional `variance`).
+  Curve models are cumulative; the engine takes per-bucket deltas.
+- **Churn simulation** — `rate`, `grace_period` (minimum buckets before
+  eligible), configurable `column`/`value`, and `cascade` (default true) which
+  removes churned rows from the FK pool so children stop referencing them. Each
+  churn is timestamped in a `churned_at` column when present.
+- **Seasonality** — `monthly` (12), `quarterly` (4), or `weekly` (7) multiplier
+  arrays applied to a bucket's new-row count.
+- **Temporal constraints** — per-column `after` / `equals` / `before` relative
+  to a parent column, with an `offset` range (e.g. `1d..60d`). Child timestamps
+  are derived from the parent's and clamped into the generation bucket, so
+  ordering holds and seasonality is visible by `created_at`.
+- **Timeline distributions** — per-column distributions that interpolate
+  linearly between dated keyframes (`overrides: { col: { timeline: { ... } } }`).
+- **Built-in lifecycle scenario** — `scenarios/lifecycle-ecommerce.yaml`.
+- **Lifecycle dry run** — `seedgen generate -f <lifecycle.yaml> --dry-run` prints
+  a per-bucket plan table (new / churned / active per table) with no database,
+  via an in-memory `LifecycleEngine::simulate`.
+- `--truncate-first` is now honored in lifecycle mode.
+
+### Changed
+
+- **Cross-bucket UNIQUE compliance** — `generate_table` now threads a persistent
+  per-table unique-value set across the engine's bucketed calls, so UNIQUE
+  columns stay unique over the whole table lifetime (not just within one
+  bucket). The standard single-call flow is unchanged.
+- Scenario parsing now recognizes `lifecycle`, `growth`, `churn`, `seasonality`,
+  `temporal`, and `timeline` blocks; scenarios without them parse exactly as
+  before (a missing `count` on a non-lifecycle table is still an error).
+
+### Testing
+
+- **6 lifecycle integration tests** (`lifecycle_tests.rs`): temporal
+  consistency, increasing growth, churn marking + cascade, seasonal December
+  peak, FK integrity, and determinism.
+- **3 lifecycle property tests** (`proptest`, `#[ignore]`): temporal
+  consistency, churn bounded, and FK integrity over seeds in `[0, 100_000)`.
+- **1 lifecycle determinism snapshot** (`insta`) over the in-memory simulation.
+- **3 lifecycle benchmarks** (Criterion): 12-month and 36-month 3-table runs,
+  plus a non-lifecycle run of equivalent total rows for comparison.
+- New fixture `schema_lifecycle.sql` (users / orders / order_items).
+
+### Known limitations
+
+- Lifecycle timestamp wiring (bucket-windowed `created_at`, parent-relative
+  temporal columns, `churned_at`) is applied for `DirectInsert`. SQL-file /
+  stdout lifecycle output still emits the generator's timestamps and restarts
+  synthetic id numbering per bucket.
+- The primary lifecycle timestamp column is `created_at` by convention; temporal
+  constraints on other column names are parsed but not yet written to the DB.
+
 ## [0.1.0] - 2026-06-01
 
 First public release. Feature-complete for PostgreSQL with all 5 critical invariants (determinism, FK integrity, NOT NULL compliance, UNIQUE compliance, offline operation) enforced by tests.
@@ -172,5 +240,6 @@ First public release. Feature-complete for PostgreSQL with all 5 critical invari
 - **Per-parent random count** uses the average of min/max rather than a per-parent random value (preserves determinism without RNG plumbing through the resolver).
 - **MySQL and SQLite adapters** are planned for v2.0; v0.1 is PostgreSQL-only.
 
-[Unreleased]: https://github.com/ff4f/seedgen/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ff4f/seedgen/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ff4f/seedgen/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ff4f/seedgen/releases/tag/v0.1.0
