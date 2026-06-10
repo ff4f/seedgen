@@ -8,7 +8,9 @@ use sqlx::PgPool;
 use seedgen::generators::{create_generator, Generator, Value};
 use seedgen::introspection::{introspect, Column, DataType, ForeignKey, SchemaGraph, Table};
 use seedgen::resolver::topological_sort;
+use seedgen::scenario::parse_scenario;
 use seedgen::semantic::{detect_generator, GeneratorType};
+use seedgen::{generate, GenerateConfig};
 
 // ---------- fixtures (no DB) ------------------------------------------------
 
@@ -193,6 +195,122 @@ fn bench_topological_sort_50_tables(c: &mut Criterion) {
     });
 }
 
+// ---------- lifecycle benchmarks (require a live DB) ------------------------
+
+/// Connect and load schema_basic.sql fresh; `None` (with a warning) if no DB.
+fn lifecycle_db() -> Option<(tokio::runtime::Runtime, PgPool)> {
+    let url = std::env::var("DATABASE_URL").ok()?;
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    let pool = rt.block_on(async {
+        let pool = PgPool::connect(&url).await.expect("connect");
+        sqlx::raw_sql("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;")
+            .execute(&pool)
+            .await
+            .expect("reset schema");
+        let fixture =
+            fs::read_to_string("tests/fixtures/schema_basic.sql").expect("read schema_basic.sql");
+        sqlx::raw_sql(&fixture)
+            .execute(&pool)
+            .await
+            .expect("apply schema_basic.sql");
+        pool
+    });
+    Some((rt, pool))
+}
+
+/// A 3-table lifecycle scenario (users → posts → comments) over `end - start`
+/// monthly buckets. `end` is exclusive (e.g. "2025-01-01" gives 12 buckets).
+fn lifecycle_bench_yaml(end: &str) -> String {
+    format!(
+        r#"
+seed: 42
+lifecycle:
+  start: 2024-01-01
+  end: {end}
+  bucket: month
+tables:
+  users:
+    growth: {{ model: linear, initial: 15, rate: 3 }}
+  posts:
+    growth: {{ follows: users, ratio: 1.0 }}
+  comments:
+    growth: {{ follows: posts, ratio: 1.0 }}
+"#
+    )
+}
+
+fn lifecycle_config(end: &str) -> GenerateConfig {
+    GenerateConfig {
+        seed: 42,
+        scenario: Some(parse_scenario(&lifecycle_bench_yaml(end)).expect("parse")),
+        truncate_first: true,
+        ..GenerateConfig::default()
+    }
+}
+
+fn bench_lifecycle_12_months_3_tables(c: &mut Criterion) {
+    let Some((rt, pool)) = lifecycle_db() else {
+        eprintln!("⚠ DATABASE_URL not set; skipping bench_lifecycle_12_months_3_tables");
+        return;
+    };
+    let config = lifecycle_config("2025-01-01"); // 12 monthly buckets
+    c.bench_function("lifecycle_12_months_3_tables", |b| {
+        b.to_async(&rt).iter(|| async {
+            let r = generate(black_box(&pool), black_box(&config))
+                .await
+                .expect("generate");
+            black_box(r.total_rows);
+        });
+    });
+}
+
+fn bench_lifecycle_36_months_3_tables(c: &mut Criterion) {
+    let Some((rt, pool)) = lifecycle_db() else {
+        eprintln!("⚠ DATABASE_URL not set; skipping bench_lifecycle_36_months_3_tables");
+        return;
+    };
+    let config = lifecycle_config("2027-01-01"); // 36 monthly buckets
+    c.bench_function("lifecycle_36_months_3_tables", |b| {
+        b.to_async(&rt).iter(|| async {
+            let r = generate(black_box(&pool), black_box(&config))
+                .await
+                .expect("generate");
+            black_box(r.total_rows);
+        });
+    });
+}
+
+/// Non-lifecycle generation sized to the same total row count as the 12-month
+/// lifecycle run, so the two numbers are directly comparable.
+fn bench_nonlifecycle_equivalent(c: &mut Criterion) {
+    let Some((rt, pool)) = lifecycle_db() else {
+        eprintln!("⚠ DATABASE_URL not set; skipping bench_nonlifecycle_equivalent");
+        return;
+    };
+    let lifecycle = lifecycle_config("2025-01-01");
+    let total = rt.block_on(async {
+        generate(&pool, &lifecycle)
+            .await
+            .expect("sizing generate")
+            .total_rows
+    });
+    let per_table = (total / 3).max(1);
+    let config = GenerateConfig {
+        seed: 42,
+        rows_per_table: per_table,
+        truncate_first: true,
+        ..GenerateConfig::default()
+    };
+    c.bench_function("nonlifecycle_equivalent_rows", |b| {
+        b.to_async(&rt).iter(|| async {
+            let r = generate(black_box(&pool), black_box(&config))
+                .await
+                .expect("generate");
+            black_box(r.total_rows);
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_introspect,
@@ -201,4 +319,12 @@ criterion_group!(
     bench_generate_10000_rows,
     bench_topological_sort_50_tables,
 );
-criterion_main!(benches);
+criterion_group! {
+    name = lifecycle_benches;
+    config = Criterion::default().sample_size(10);
+    targets =
+        bench_lifecycle_12_months_3_tables,
+        bench_lifecycle_36_months_3_tables,
+        bench_nonlifecycle_equivalent,
+}
+criterion_main!(benches, lifecycle_benches);

@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::Context;
 use sqlx::PgPool;
 
+use crate::lifecycle::{LifecycleConfig, LifecycleEngine, TableLifecycle};
 use crate::scenario::{
     load_template, parse_scenario, CountExpression, ScenarioConfig, TableScenario,
 };
@@ -71,6 +72,14 @@ pub async fn run(args: Args, url: &str) -> anyhow::Result<()> {
     };
 
     if args.dry_run {
+        // Lifecycle scenarios get a per-bucket plan table.
+        if let Some(scenario) = &config.scenario {
+            if let Some(lifecycle) = &scenario.lifecycle {
+                print_lifecycle_plan(lifecycle, &scenario.table_lifecycles, seed);
+                return Ok(());
+            }
+        }
+
         println!("Dry run — seed={seed} rows={}", args.rows);
         if let Some(scenario) = &config.scenario {
             println!("  scenario tables: {}", scenario.tables.len());
@@ -126,14 +135,62 @@ fn resolve_scenario(
     }
 }
 
+fn print_lifecycle_plan(
+    lifecycle: &LifecycleConfig,
+    table_lifecycles: &HashMap<String, TableLifecycle>,
+    seed: u64,
+) {
+    let engine = LifecycleEngine::new(lifecycle.clone(), table_lifecycles.clone());
+    let report = engine.simulate(seed);
+
+    println!(
+        "Lifecycle simulation: {} → {} ({} buckets, seed: {})\n",
+        lifecycle.start,
+        lifecycle.end,
+        report.buckets.len(),
+        seed,
+    );
+
+    let mut header = format!("  {:<10}", "Bucket");
+    for t in &report.table_order {
+        header.push_str(&format!(" | {:>22}", truncate(t, 22)));
+    }
+    println!("{header}");
+
+    for plan in &report.buckets {
+        let mut line = format!("  {:<10}", plan.label);
+        for stat in &plan.stats {
+            let cell = if stat.churned > 0 {
+                format!("+{} / -{} / {}", stat.new, stat.churned, stat.active)
+            } else {
+                format!("+{} / {}", stat.new, stat.active)
+            };
+            line.push_str(&format!(" | {cell:>22}"));
+        }
+        println!("{line}");
+    }
+
+    println!("\nTotals:");
+    for t in &report.table_order {
+        let (total, active) = report.totals.get(t).copied().unwrap_or((0, 0));
+        let churned = total.saturating_sub(active);
+        println!("  {t:<20} {total} created ({active} active, {churned} churned)");
+    }
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}…", &s[..max.saturating_sub(1)])
+    }
+}
+
 fn merge_entities(
     base: Option<ScenarioConfig>,
     entities: HashMap<String, usize>,
 ) -> ScenarioConfig {
-    let mut cfg = base.unwrap_or(ScenarioConfig {
-        seed: None,
-        tables: HashMap::new(),
-    });
+    let mut cfg = base.unwrap_or_default();
     for (name, count) in entities {
         cfg.tables
             .entry(name)

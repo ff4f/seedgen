@@ -1,0 +1,68 @@
+seed: 42
+
+lifecycle:
+  start: 2023-01-01
+  end: 2026-06-01
+  bucket: month        # granularity: day | week | month | quarter
+
+tables:
+  users:
+    growth:
+      model: s_curve     # exponential | linear | s_curve | logistic | custom
+      initial: 10        # users in the first bucket
+      capacity: 5000     # plateau (s_curve / logistic only)
+      rate: 0.15         # growth rate per bucket
+    churn:
+      rate: 0.03         # 3% of existing users churn per bucket
+      grace_period: 2    # at least 2 buckets before eligible to churn
+      column: is_active  # column toggled on churn
+      value: false       # value written on churn
+    overrides:
+      role:
+        distribution: { admin: 2%, moderator: 5%, user: 93% }
+      plan:
+        # Distribution shifts over time (linearly interpolated between keyframes)
+        timeline:
+          2023-01-01: { pro: 80%, free: 20% }
+          2024-06-01: { pro: 40%, free: 45%, enterprise: 15% }
+          2025-06-01: { pro: 25%, free: 55%, enterprise: 20% }
+
+  orders:
+    growth:
+      follows: users       # proportional to ACTIVE users
+      ratio: 3.2           # ~3.2 orders per active user per bucket
+      variance: 0.35       # ±35% random variance per bucket
+    seasonality:
+      monthly: [1.0, 0.7, 0.85, 1.0, 1.1, 0.8, 0.7, 0.85, 1.2, 1.4, 1.8, 2.5]
+      #         Jan  Feb  Mar   Apr  May  Jun  Jul  Aug   Sep  Oct  Nov  Dec
+    temporal:
+      created_at:
+        after: users.created_at     # must be after parent signup
+        offset: 1d..60d             # 1-60 days after parent
+    overrides:
+      status:
+        timeline:
+          2023-01-01: { pending: 40%, completed: 45%, cancelled: 15% }
+          2025-01-01: { pending: 8%, completed: 72%, cancelled: 8%, refunded: 5%, shipped: 7% }
+      total_amount:
+        range: [15000, 2500000]     # IDR
+
+  order_items:
+    growth:
+      follows: orders
+      per_parent: 1..5               # 1-5 items per order
+    temporal:
+      created_at:
+        equals: orders.created_at    # exact same timestamp as parent order
+
+  reviews:
+    growth:
+      follows: orders
+      ratio: 0.25                    # 25% of orders get a review
+    temporal:
+      created_at:
+        after: orders.created_at
+        offset: 3d..30d              # review 3-30 days after order
+    overrides:
+      rating:
+        distribution: { 5: 35%, 4: 30%, 3: 20%, 2: 10%, 1: 5% }

@@ -54,6 +54,49 @@ async fn ensure_constrained(pool: &PgPool) {
     ensure_fixture(pool, "priced_items", "tests/fixtures/schema_with_check.sql").await;
 }
 
+async fn ensure_lifecycle(pool: &PgPool) {
+    ensure_fixture(pool, "order_items", "tests/fixtures/schema_lifecycle.sql").await;
+}
+
+/// A small 5-month lifecycle scenario (root + child + grandchild) parametrized
+/// by seed. Temporal constraints are on `created_at`, which the engine wires.
+fn lifecycle_yaml(seed: u64) -> String {
+    format!(
+        r#"
+seed: {seed}
+lifecycle:
+  start: 2024-01-01
+  end: 2024-06-01
+  bucket: month
+tables:
+  users:
+    growth: {{ model: linear, initial: 8, rate: 3 }}
+    churn: {{ rate: 0.15, grace_period: 2, column: is_active, value: false }}
+  orders:
+    growth: {{ follows: users, ratio: 1.5 }}
+    temporal:
+      created_at: {{ after: users.created_at, offset: 1d..20d }}
+  order_items:
+    growth: {{ follows: orders, per_parent: 1..3 }}
+    temporal:
+      created_at: {{ equals: orders.created_at }}
+"#
+    )
+}
+
+fn lifecycle_config(seed: u64) -> (GenerateConfig, String) {
+    let yaml = lifecycle_yaml(seed);
+    let scenario = seedgen::scenario::parse_scenario(&yaml).expect("parse lifecycle yaml");
+    let config = GenerateConfig {
+        seed,
+        rows_per_table: 10,
+        scenario: Some(scenario),
+        truncate_first: true,
+        ..GenerateConfig::default()
+    };
+    (config, yaml)
+}
+
 fn run<F, Fut, T>(f: F) -> T
 where
     F: FnOnce(PgPool) -> Fut,
@@ -264,5 +307,92 @@ proptest! {
         prop_assert!(rows_inserted > 0, "no rows inserted (seed={})", seed);
         prop_assert!(min_price > 0.0, "min price {} not > 0 (seed={})", min_price, seed);
         prop_assert!(max_price > 0.0, "max price {} not > 0 (seed={})", max_price, seed);
+    }
+}
+
+proptest! {
+    // Lifecycle generation is heavier (multi-bucket, multi-table) than a single
+    // generate, so use fewer cases. Seeds are sampled across the full range.
+    #![proptest_config(ProptestConfig {
+        cases: 8,
+        max_shrink_iters: 16,
+        ..ProptestConfig::default()
+    })]
+
+    /// No child row may be timestamped before its parent: orders after their
+    /// user, order_items at-or-after their order.
+    #[test]
+    #[ignore]
+    fn prop_lifecycle_temporal_consistency(seed in 0u64..100_000) {
+        let (orders_before_user, items_before_order) = run(|pool| async move {
+            ensure_lifecycle(&pool).await;
+            let (config, _) = lifecycle_config(seed);
+            generate(&pool, &config).await.expect("lifecycle generate failed");
+
+            let (a,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM orders o JOIN users u ON o.user_id = u.id \
+                 WHERE o.created_at < u.created_at"
+            ).fetch_one(&pool).await.expect("query failed");
+
+            let (b,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM order_items i JOIN orders o ON i.order_id = o.id \
+                 WHERE i.created_at < o.created_at"
+            ).fetch_one(&pool).await.expect("query failed");
+
+            (a, b)
+        });
+
+        prop_assert_eq!(orders_before_user, 0, "orders before their user (seed={})", seed);
+        prop_assert_eq!(items_before_order, 0, "order_items before their order (seed={})", seed);
+    }
+
+    /// Churned users can never exceed total users, and every churned user is
+    /// stamped — churn only flips existing rows, never invents them.
+    #[test]
+    #[ignore]
+    fn prop_lifecycle_churn_bounded(seed in 0u64..100_000) {
+        let (total, churned, unstamped) = run(|pool| async move {
+            ensure_lifecycle(&pool).await;
+            let (config, _) = lifecycle_config(seed);
+            generate(&pool, &config).await.expect("lifecycle generate failed");
+
+            let (t,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+                .fetch_one(&pool).await.expect("query failed");
+            let (c,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE NOT is_active")
+                .fetch_one(&pool).await.expect("query failed");
+            let (u,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM users WHERE NOT is_active AND churned_at IS NULL"
+            ).fetch_one(&pool).await.expect("query failed");
+
+            (t, c, u)
+        });
+
+        prop_assert!(churned <= total, "churned {} > total {} (seed={})", churned, total, seed);
+        prop_assert_eq!(unstamped, 0, "churned users without a timestamp (seed={})", seed);
+    }
+
+    /// Every FK value references an existing parent row (zero orphans).
+    #[test]
+    #[ignore]
+    fn prop_lifecycle_fk_integrity(seed in 0u64..100_000) {
+        let orphans = run(|pool| async move {
+            ensure_lifecycle(&pool).await;
+            let (config, _) = lifecycle_config(seed);
+            generate(&pool, &config).await.expect("lifecycle generate failed");
+
+            let (order_orphans,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM orders o \
+                 WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = o.user_id)"
+            ).fetch_one(&pool).await.expect("query failed");
+
+            let (item_orphans,): (i64,) = sqlx::query_as(
+                "SELECT COUNT(*) FROM order_items i \
+                 WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.id = i.order_id)"
+            ).fetch_one(&pool).await.expect("query failed");
+
+            order_orphans + item_orphans
+        });
+
+        prop_assert_eq!(orphans, 0, "lifecycle FK violations (seed={})", seed);
     }
 }

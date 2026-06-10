@@ -39,7 +39,7 @@ pub fn generate_sql(table_name: &str, columns: &[String], rows: &[Vec<Value>]) -
     out
 }
 
-fn format_value(value: &Value) -> String {
+pub fn format_value(value: &Value) -> String {
     match value {
         Value::Null => "NULL".to_string(),
         Value::Bool(true) => "TRUE".to_string(),
@@ -58,7 +58,7 @@ fn escape_quotes(s: &str) -> String {
     s.replace('\'', "''")
 }
 
-fn quote_ident(name: &str) -> String {
+pub fn quote_ident(name: &str) -> String {
     let escaped = name.replace('"', "\"\"");
     format!("\"{escaped}\"")
 }

@@ -1,0 +1,104 @@
+---
+source: tests/lifecycle_snapshot.rs
+expression: "&snapshot"
+---
+seed: 42
+table_order:
+  - users
+  - orders
+  - order_items
+buckets:
+  - label: 2024-01
+    stats:
+      - table: users
+        new: 10
+        churned: 0
+        active: 10
+      - table: orders
+        new: 20
+        churned: 0
+        active: 20
+      - table: order_items
+        new: 36
+        churned: 0
+        active: 36
+  - label: 2024-02
+    stats:
+      - table: users
+        new: 4
+        churned: 0
+        active: 14
+      - table: orders
+        new: 22
+        churned: 0
+        active: 42
+      - table: order_items
+        new: 78
+        churned: 0
+        active: 114
+  - label: 2024-03
+    stats:
+      - table: users
+        new: 6
+        churned: 1
+        active: 19
+      - table: orders
+        new: 38
+        churned: 0
+        active: 80
+      - table: order_items
+        new: 153
+        churned: 0
+        active: 267
+  - label: 2024-04
+    stats:
+      - table: users
+        new: 8
+        churned: 1
+        active: 26
+      - table: orders
+        new: 62
+        churned: 0
+        active: 142
+      - table: order_items
+        new: 303
+        churned: 0
+        active: 570
+  - label: 2024-05
+    stats:
+      - table: users
+        new: 12
+        churned: 1
+        active: 37
+      - table: orders
+        new: 74
+        churned: 0
+        active: 216
+      - table: order_items
+        new: 422
+        churned: 0
+        active: 992
+  - label: 2024-06
+    stats:
+      - table: users
+        new: 14
+        churned: 3
+        active: 48
+      - table: orders
+        new: 144
+        churned: 0
+        active: 360
+      - table: order_items
+        new: 700
+        churned: 0
+        active: 1692
+totals:
+  order_items:
+    - 1692
+    - 1692
+  orders:
+    - 360
+    - 360
+  users:
+    - 54
+    - 48

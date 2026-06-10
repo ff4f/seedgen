@@ -42,6 +42,12 @@ seedgen generate --url $DATABASE_URL --entities users=1000,orders=5000
 
 # Dump to a SQL file instead of inserting
 seedgen generate --url $DATABASE_URL --output seed.sql --seed 42
+
+# Lifecycle simulation — data that grows, churns, and trends over time
+seedgen generate --url $DATABASE_URL -f scenarios/lifecycle-ecommerce.yaml --seed 42
+
+# Preview the per-bucket plan without touching the database
+seedgen generate -f scenarios/lifecycle-ecommerce.yaml --seed 42 --dry-run
 ```
 
 Other commands:
@@ -117,6 +123,65 @@ tables:
 
 Run it with `seedgen generate -f my-scenario.yaml --url $DATABASE_URL`.
 
+## Lifecycle simulation
+
+Normal generation creates every row as if it appeared at once. **Lifecycle mode**
+instead makes data evolve over a time window — adoption curves, churn, seasonal
+spikes, and child rows that follow their parents in time. It's opt-in: add a
+`lifecycle:` block and SeedGen runs bucket by bucket (day/week/month/quarter),
+generating new rows, churning old ones, and timestamping everything coherently.
+Without the block, behavior is exactly as before.
+
+```yaml
+# lifecycle-ecommerce.yaml
+seed: 42
+
+lifecycle:
+  start: 2023-01-01
+  end: 2026-06-01
+  bucket: month
+
+tables:
+  users:
+    growth:                       # linear | exponential | s_curve | logistic | custom
+      model: s_curve
+      initial: 10
+      capacity: 5000
+      rate: 0.15
+    churn:
+      rate: 0.03                  # 3% of active users leave each month
+      grace_period: 2             # ...but not before they're 2 months old
+      column: is_active
+      value: false
+    overrides:
+      plan:
+        timeline:                 # distribution interpolated between keyframes
+          2023-01-01: { pro: 80%, free: 20% }
+          2025-06-01: { pro: 25%, free: 55%, enterprise: 20% }
+
+  orders:
+    growth:
+      follows: users              # ~3.2 orders per active user per month
+      ratio: 3.2
+      variance: 0.35
+    seasonality:
+      monthly: [1.0, 0.7, 0.85, 1.0, 1.1, 0.8, 0.7, 0.85, 1.2, 1.4, 1.8, 2.5]
+    temporal:
+      created_at:
+        after: users.created_at   # always after the user signed up
+        offset: 1d..60d
+```
+
+```bash
+seedgen generate --url $DATABASE_URL -f lifecycle-ecommerce.yaml --seed 42
+seedgen generate -f lifecycle-ecommerce.yaml --seed 42 --dry-run   # plan only, no DB
+```
+
+The result has a real story: `SELECT date_trunc('month', created_at), count(*) FROM users GROUP BY 1`
+shows an adoption curve, December outsells July, churned users stop ordering, and
+no child row is ever timestamped before its parent. Same seed still gives the
+same data.
+
 ## GitHub Action
 
 There's a composite action that grabs the binary and runs `generate` for you. Drop it into a workflow before your integration tests:
@@ -132,7 +197,7 @@ There's a composite action that grabs the binary and runs `generate` for you. Dr
 
 Useful inputs: `database_url` (required), `scenario`, `scenario_file`, `seed`, `rows`, `entities`, `locale`, `fast`, `truncate_first`, `version`. The `database_url` is never echoed in logs.
 
-For reproducible CI, pin both the action ref and the binary: `uses: ff4f/seedgen@v1` with `version: v0.1.0`.
+For reproducible CI, pin both the action ref and the binary: `uses: ff4f/seedgen@v1` with `version: v0.2.0`.
 
 ## MCP server
 
@@ -174,7 +239,22 @@ PostgreSQL 12 through 17 is the only stable target right now. CI runs against al
 
 ## Status
 
-Currently v0.1.0. PostgreSQL works end-to-end. Direct INSERT and SQL file output are stable. COPY protocol output, JSON output, and HTTP+SSE MCP transport are planned for v0.2. MySQL and SQLite adapters are further out.
+Currently v0.2.0. PostgreSQL works end-to-end, and lifecycle simulation landed in this release.
+
+| Capability | Status |
+|---|:--:|
+| PostgreSQL introspection + generation | ✅ |
+| Determinism / FK / NOT NULL / UNIQUE invariants | ✅ |
+| Direct INSERT + SQL file output | ✅ |
+| Scenario files (counts, distributions, templates) | ✅ |
+| **Lifecycle simulation (growth, churn, seasonality, temporal)** | ✅ |
+| MCP server (stdio) | ✅ |
+| COPY protocol output (`--fast`) | ⬜ |
+| JSON output | ⬜ |
+| HTTP+SSE MCP transport | ⬜ |
+| MySQL / SQLite adapters | ⬜ |
+
+COPY protocol output, JSON output, and HTTP+SSE MCP transport are planned next. MySQL and SQLite adapters are further out.
 
 ## Contributing
 
