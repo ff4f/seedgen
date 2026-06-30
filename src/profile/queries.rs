@@ -16,6 +16,11 @@
 //! Percentile fractions (`0.25`, `0.5`, …) are template constants, not user
 //! input. The cardinality threshold is *not* interpolated into SQL — the guard
 //! compares the returned `distinct_count` in Rust.
+//!
+//! `PERCENTILE_CONT` results are wrapped in `ROUND(…::numeric, 6)` so the
+//! interpolated value is reproducible: the raw `float8` interpolation carries
+//! ULP-level noise that differs across PostgreSQL versions/platforms, which
+//! otherwise makes the profile non-deterministic (and breaks snapshot tests).
 
 use std::collections::HashSet;
 
@@ -176,12 +181,12 @@ impl<'a> QueryBuilder<'a> {
              AVG(cnt::float8) AS avg_ratio, \
              MIN(cnt) AS min_ratio, \
              MAX(cnt) AS max_ratio, \
-             PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY cnt::float8) AS p25_ratio, \
-             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cnt::float8) AS median_ratio, \
-             PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY cnt::float8) AS p75_ratio, \
+             ROUND((PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY cnt::float8))::numeric, 6)::float8 AS p25_ratio, \
+             ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY cnt::float8))::numeric, 6)::float8 AS median_ratio, \
+             ROUND((PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY cnt::float8))::numeric, 6)::float8 AS p75_ratio, \
              STDDEV(cnt::float8) AS stddev_ratio, \
-             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY cnt::float8) AS p95_ratio, \
-             PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY cnt::float8) AS p99_ratio \
+             ROUND((PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY cnt::float8))::numeric, 6)::float8 AS p95_ratio, \
+             ROUND((PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY cnt::float8))::numeric, 6)::float8 AS p99_ratio \
              FROM (SELECT {fk}, COUNT(*) AS cnt FROM {child} GROUP BY {fk}) sub"
         );
         PlannedQuery {
@@ -232,11 +237,11 @@ impl<'a> QueryBuilder<'a> {
              MAX(({c})::float8) AS max_val, \
              AVG(({c})::float8) AS mean_val, \
              STDDEV(({c})::float8) AS stddev_val, \
-             PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY ({c})::float8) AS p25, \
-             PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ({c})::float8) AS p50, \
-             PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY ({c})::float8) AS p75, \
-             PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ({c})::float8) AS p95, \
-             PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY ({c})::float8) AS p99, \
+             ROUND((PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY ({c})::float8))::numeric, 6)::float8 AS p25, \
+             ROUND((PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ({c})::float8))::numeric, 6)::float8 AS p50, \
+             ROUND((PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY ({c})::float8))::numeric, 6)::float8 AS p75, \
+             ROUND((PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ({c})::float8))::numeric, 6)::float8 AS p95, \
+             ROUND((PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY ({c})::float8))::numeric, 6)::float8 AS p99, \
              (COUNT(*) FILTER (WHERE {c} IS NULL) * 100.0 / NULLIF(COUNT(*), 0))::float8 AS null_rate \
              FROM {t}"
         );
