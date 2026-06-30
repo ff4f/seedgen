@@ -12,7 +12,7 @@ use crate::introspection::{
     introspect, Column, DataType, ForeignKey, IntrospectionError, SchemaGraph, Table,
 };
 use crate::resolver::{resolve, DeferredUpdate, ResolverError};
-use crate::scenario::parser::{CountExpression, ScenarioConfig};
+use crate::scenario::parser::{ColumnOverride, CountExpression, ScenarioConfig};
 use crate::semantic::{
     detect_generator, ConstraintHandler, ConstraintHandlerKind, GeneratorType, ValidationResult,
 };
@@ -159,6 +159,8 @@ pub async fn generate(
         _ => None,
     };
 
+    let empty_overrides: HashMap<String, ColumnOverride> = HashMap::new();
+
     for table_name in &selected {
         let table = schema
             .table(table_name)
@@ -166,6 +168,13 @@ pub async fn generate(
 
         let row_count = resolve_row_count(table_name, config, &generated_ids);
         let table_started = Instant::now();
+
+        let overrides = config
+            .scenario
+            .as_ref()
+            .and_then(|s| s.tables.get(table_name))
+            .map(|ts| &ts.overrides)
+            .unwrap_or(&empty_overrides);
 
         let outcome = generate_table(
             pool,
@@ -176,6 +185,7 @@ pub async fn generate(
             &mut rng,
             &mut generated_ids,
             &mut unique_states,
+            overrides,
             &config.output_mode,
         )
         .await?;
@@ -298,6 +308,9 @@ pub(crate) async fn generate_table(
     // across buckets so uniqueness holds over the whole table, not just one
     // bucket. See `init_unique_state`.
     unique_states: &mut HashMap<String, UniqueState>,
+    // Per-column value overrides (scenario `distribution`/`range`, or
+    // profile-derived). Empty for callers that don't apply overrides.
+    overrides: &HashMap<String, ColumnOverride>,
     output: &OutputMode,
 ) -> Result<GenerateOutcome, GenerateError> {
     if row_count == 0 {
@@ -309,7 +322,7 @@ pub(crate) async fn generate_table(
     }
 
     let materialize_auto_ids = !matches!(output, OutputMode::DirectInsert);
-    let plan = build_column_plan(schema, table, deferred, materialize_auto_ids);
+    let plan = build_column_plan(schema, table, deferred, materialize_auto_ids, overrides);
     if plan.included.is_empty() {
         return Err(GenerateError::ConstraintViolation {
             table: table.name.clone(),
@@ -376,10 +389,59 @@ struct IncludedColumn<'a> {
 }
 
 enum ColumnSource {
-    Fk { parent_table: String },
+    Fk {
+        parent_table: String,
+    },
     DeferredFk,
     Generator(Box<dyn Generator>),
     SyntheticId,
+    /// Weighted categorical pick from a scenario/profile `distribution` override.
+    Distribution(WeightedValues),
+    /// Bounded numeric value from a scenario/profile `range` override.
+    RangeOverride {
+        min: f64,
+        max: f64,
+    },
+}
+
+/// A deterministic weighted sampler over pre-typed values. Entries are stored in
+/// a fixed (sorted) order so sampling is reproducible regardless of the source
+/// map's iteration order.
+struct WeightedValues {
+    values: Vec<Value>,
+    cumulative: Vec<f64>,
+    total: f64,
+}
+
+impl WeightedValues {
+    fn new(pairs: Vec<(Value, f64)>) -> Self {
+        let mut values = Vec::with_capacity(pairs.len());
+        let mut cumulative = Vec::with_capacity(pairs.len());
+        let mut total = 0.0;
+        for (value, weight) in pairs {
+            total += weight.max(0.0);
+            values.push(value);
+            cumulative.push(total);
+        }
+        Self {
+            values,
+            cumulative,
+            total,
+        }
+    }
+
+    fn pick(&self, rng: &mut ChaCha8Rng) -> Value {
+        if self.values.is_empty() || self.total <= 0.0 {
+            return Value::Null;
+        }
+        let r = rng.gen_range(0.0..self.total);
+        for (i, &c) in self.cumulative.iter().enumerate() {
+            if r < c {
+                return self.values[i].clone();
+            }
+        }
+        self.values[self.values.len() - 1].clone()
+    }
 }
 
 fn build_column_plan<'a>(
@@ -387,6 +449,7 @@ fn build_column_plan<'a>(
     table: &'a Table,
     deferred: &[DeferredUpdate],
     materialize_auto_ids: bool,
+    overrides: &HashMap<String, ColumnOverride>,
 ) -> ColumnPlan<'a> {
     let mut included = Vec::new();
     let mut auto_assigned = Vec::new();
@@ -420,6 +483,16 @@ fn build_column_plan<'a>(
                     parent_table: fk.to_table.clone(),
                 },
             });
+            continue;
+        }
+
+        // A scenario/profile override on this column's values takes precedence
+        // over the inferred generator (FK integrity above still wins).
+        if let Some(source) = overrides
+            .get(&column.name)
+            .and_then(|ov| override_source(ov, column))
+        {
+            included.push(IncludedColumn { column, source });
             continue;
         }
 
@@ -459,6 +532,70 @@ fn find_fk<'a>(schema: &'a SchemaGraph, table: &str, column: &str) -> Option<&'a
         .foreign_keys
         .iter()
         .find(|fk| fk.from_table == table && fk.from_column == column)
+}
+
+/// Build a value source from a column override, if it is a kind the generator
+/// applies directly here. Returns `None` for override kinds handled elsewhere.
+fn override_source(ov: &ColumnOverride, column: &Column) -> Option<ColumnSource> {
+    match ov {
+        ColumnOverride::Distribution(dist) => {
+            // Sort by key so sampling order is deterministic (the map is unordered).
+            let mut pairs: Vec<(&String, &f64)> = dist.iter().collect();
+            pairs.sort_by(|a, b| a.0.cmp(b.0));
+            let values = pairs
+                .into_iter()
+                .map(|(k, w)| (key_to_value(k, &column.data_type), *w))
+                .collect();
+            Some(ColumnSource::Distribution(WeightedValues::new(values)))
+        }
+        ColumnOverride::Range { min, max } => Some(ColumnSource::RangeOverride {
+            min: *min,
+            max: *max,
+        }),
+        _ => None,
+    }
+}
+
+/// Convert a distribution key string into a typed [`Value`] for `data_type`.
+fn key_to_value(key: &str, data_type: &DataType) -> Value {
+    match data_type {
+        DataType::SmallInt | DataType::Integer | DataType::BigInt => key
+            .parse::<i64>()
+            .map(Value::Int)
+            .unwrap_or_else(|_| Value::String(key.to_string())),
+        DataType::Boolean => key
+            .parse::<bool>()
+            .map(Value::Bool)
+            .unwrap_or_else(|_| Value::String(key.to_string())),
+        DataType::Real | DataType::DoublePrecision | DataType::Numeric => key
+            .parse::<f64>()
+            .map(Value::Float)
+            .unwrap_or_else(|_| Value::String(key.to_string())),
+        _ => Value::String(key.to_string()),
+    }
+}
+
+/// Generate a bounded numeric value for a `range` override.
+fn range_value(data_type: &DataType, min: f64, max: f64, rng: &mut ChaCha8Rng) -> Value {
+    let (lo, hi) = if min <= max { (min, max) } else { (max, min) };
+    match data_type {
+        DataType::SmallInt | DataType::Integer | DataType::BigInt => {
+            let lo_i = lo.round() as i64;
+            let hi_i = hi.round() as i64;
+            if lo_i >= hi_i {
+                Value::Int(lo_i)
+            } else {
+                Value::Int(rng.gen_range(lo_i..=hi_i))
+            }
+        }
+        _ => {
+            if lo >= hi {
+                Value::Float(lo)
+            } else {
+                Value::Float(rng.gen_range(lo..hi))
+            }
+        }
+    }
 }
 
 pub(crate) struct UniqueState {
@@ -548,6 +685,10 @@ fn generate_row(
                     }
                 }
                 value
+            }
+            ColumnSource::Distribution(weighted) => weighted.pick(rng),
+            ColumnSource::RangeOverride { min, max } => {
+                range_value(&inc.column.data_type, *min, *max, rng)
             }
         };
         row.push(value);

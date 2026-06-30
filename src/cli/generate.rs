@@ -26,6 +26,8 @@ pub struct Args {
     pub include: Option<Vec<String>>,
     pub exclude: Option<Vec<String>>,
     pub truncate_first: bool,
+    pub profile: Option<String>,
+    pub scale: f64,
 }
 
 pub async fn run(args: Args, url: &str) -> anyhow::Result<()> {
@@ -50,6 +52,19 @@ pub async fn run(args: Args, url: &str) -> anyhow::Result<()> {
     }
 
     let mut scenario = resolve_scenario(args.scenario.as_deref(), args.file.as_deref())?;
+
+    // A production profile supplies the whole scenario (counts + overrides).
+    let mut compliance_profile = None;
+    if let Some(profile_path) = args.profile.as_deref() {
+        if args.scenario.is_some() || args.file.is_some() {
+            anyhow::bail!("--profile cannot be combined with --scenario or -f");
+        }
+        let profile = crate::profile::output::load_profile(std::path::Path::new(profile_path))
+            .with_context(|| format!("failed to load profile `{profile_path}`"))?;
+        compliance_profile = Some(profile.clone());
+        let applicator = crate::profile::ProfileApplicator::new(profile, args.scale)?;
+        scenario = Some(applicator.to_scenario()?);
+    }
 
     if let Some(entities) = args.entities {
         scenario = Some(merge_entities(scenario, entities));
@@ -114,6 +129,20 @@ pub async fn run(args: Args, url: &str) -> anyhow::Result<()> {
             t.name, t.rows_inserted, t.duration
         );
     }
+
+    // Profile-based generation: report how closely the result matches.
+    if let Some(profile) = compliance_profile {
+        if matches!(config.output_mode, OutputMode::DirectInsert) {
+            match crate::profile::ComplianceValidator::with_default_tolerance(profile)
+                .validate(&pool)
+                .await
+            {
+                Ok(report) => report.print(),
+                Err(e) => eprintln!("warning: compliance validation skipped: {e}"),
+            }
+        }
+    }
+
     Ok(())
 }
 

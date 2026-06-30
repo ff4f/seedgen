@@ -102,6 +102,62 @@ pub enum Commands {
         /// TRUNCATE all target tables before inserting.
         #[arg(long)]
         truncate_first: bool,
+
+        /// Generate from a production profile file (statistics-driven).
+        #[arg(long)]
+        profile: Option<String>,
+
+        /// Scale factor for `--profile` generation (0 < scale <= 1).
+        #[arg(long, default_value = "1.0")]
+        scale: f64,
+    },
+
+    /// Profile a database's statistics (read-only, aggregate-only).
+    Profile {
+        /// Write the profile to this file.
+        #[arg(long, default_value = "prod-profile.yaml")]
+        output: String,
+
+        /// Profile format: `yaml` or `json`.
+        #[arg(long, default_value = "yaml")]
+        format: String,
+
+        /// Max distinct values before a column is treated as high-cardinality.
+        #[arg(long, default_value = "50")]
+        cardinality_threshold: usize,
+
+        /// Columns to exclude (`table.column`), comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        exclude: Option<Vec<String>>,
+
+        /// Columns to force-include even if sensitive (`table.column`).
+        #[arg(long, value_delimiter = ',')]
+        include: Option<Vec<String>>,
+
+        /// Refuse to profile when connected as a superuser.
+        #[arg(long)]
+        strict_security: bool,
+
+        /// Skip hourly-density capture for timestamp columns.
+        #[arg(long)]
+        no_hourly: bool,
+
+        /// Skip monthly-density capture for timestamp columns.
+        #[arg(long)]
+        no_monthly: bool,
+
+        /// Print the queries that would run, without executing them.
+        #[arg(long)]
+        dry_run_queries: bool,
+
+        /// Print the queries as a runnable SQL file, without executing them.
+        #[arg(long)]
+        export_queries: bool,
+
+        /// Build the profile offline from an externally-collected results file
+        /// (no database connection needed).
+        #[arg(long)]
+        import_results: Option<String>,
     },
 
     /// TRUNCATE tables in safe order.

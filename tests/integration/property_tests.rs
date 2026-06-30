@@ -7,6 +7,8 @@ use proptest::prelude::*;
 use sqlx::PgPool;
 use tokio::sync::Mutex;
 
+use seedgen::introspection::introspect;
+use seedgen::profile::{ProfileApplicator, ProfileCollector, ProfileOptions};
 use seedgen::{generate, GenerateConfig};
 
 // libtest runs `proptest!`-generated `#[test]` fns in parallel threads against
@@ -56,6 +58,48 @@ async fn ensure_constrained(pool: &PgPool) {
 
 async fn ensure_lifecycle(pool: &PgPool) {
     ensure_fixture(pool, "order_items", "tests/fixtures/schema_lifecycle.sql").await;
+}
+
+/// `n` users with exactly 5 posts each (a clean 5.0 child:parent ratio).
+async fn seed_users_posts(pool: &PgPool, n: i64) {
+    sqlx::raw_sql("TRUNCATE users, posts, comments RESTART IDENTITY CASCADE")
+        .execute(pool)
+        .await
+        .expect("truncate");
+    sqlx::raw_sql(&format!(
+        "INSERT INTO users (email, name, is_active) \
+         SELECT 'u' || g || '@ex.com', 'User ' || g, true FROM generate_series(0, {}) g",
+        n - 1
+    ))
+    .execute(pool)
+    .await
+    .expect("seed users");
+    sqlx::raw_sql(
+        "INSERT INTO posts (user_id, title, slug, body) \
+         SELECT u.id, 't' || u.id || '-' || s, 's-' || u.id || '-' || s, 'b' \
+         FROM users u, generate_series(1, 5) s",
+    )
+    .execute(pool)
+    .await
+    .expect("seed posts");
+}
+
+/// `n` users whose `name` follows a fixed 50/30/20 distribution.
+async fn seed_users_dist(pool: &PgPool, n: i64) {
+    sqlx::raw_sql("TRUNCATE users, posts, comments RESTART IDENTITY CASCADE")
+        .execute(pool)
+        .await
+        .expect("truncate");
+    sqlx::raw_sql(&format!(
+        "INSERT INTO users (email, name, is_active) \
+         SELECT 'u' || g || '@ex.com', \
+                CASE WHEN g % 10 < 5 THEN 'Alice' WHEN g % 10 < 8 THEN 'Bob' ELSE 'Carol' END, true \
+         FROM generate_series(0, {}) g",
+        n - 1
+    ))
+    .execute(pool)
+    .await
+    .expect("seed users");
 }
 
 /// A small 5-month lifecycle scenario (root + child + grandchild) parametrized
@@ -394,5 +438,87 @@ proptest! {
         });
 
         prop_assert_eq!(orphans, 0, "lifecycle FK violations (seed={})", seed);
+    }
+}
+
+proptest! {
+    // Profiling round-trips are heavy (seed + profile + generate per case).
+    #![proptest_config(ProptestConfig {
+        cases: 6,
+        max_shrink_iters: 8,
+        ..ProptestConfig::default()
+    })]
+
+    /// Any scale in (0.01, 1.0] preserves the child:parent ratio: the parent
+    /// table scales, and `per_parent` keeps children proportional.
+    #[test]
+    #[ignore]
+    fn prop_profile_scale_preserves_ratio(scale in 0.01f64..=1.0) {
+        let ratio = run(|pool| async move {
+            ensure_basic(&pool).await;
+            seed_users_posts(&pool, 60).await;
+
+            let schema = introspect(&pool).await.expect("introspect");
+            let mut collector = ProfileCollector::new(&pool, schema, ProfileOptions::default())
+                .await.expect("collector");
+            let profile = collector.collect().await.expect("collect");
+            let scenario = ProfileApplicator::new(profile, scale)
+                .expect("scale valid").to_scenario().expect("scenario");
+
+            generate(&pool, &GenerateConfig {
+                seed: 42,
+                scenario: Some(scenario),
+                include_tables: Some(vec!["users".into(), "posts".into()]),
+                truncate_first: true,
+                ..GenerateConfig::default()
+            }).await.expect("generate");
+
+            let (u,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+                .fetch_one(&pool).await.expect("count users");
+            let (p,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM posts")
+                .fetch_one(&pool).await.expect("count posts");
+            if u == 0 { -1.0 } else { p as f64 / u as f64 }
+        });
+
+        prop_assert!(
+            (ratio - 5.0).abs() < 0.5,
+            "posts:users ratio {} at scale {}", ratio, scale
+        );
+    }
+
+    /// Same profile + same seed ⇒ byte-identical generated output, any seed.
+    #[test]
+    #[ignore]
+    fn prop_profile_deterministic(seed in 0u64..100_000) {
+        type Rows = Vec<(i32, String)>;
+        let (first, second): (Rows, Rows) = run(|pool| async move {
+            ensure_basic(&pool).await;
+            seed_users_dist(&pool, 200).await;
+
+            let schema = introspect(&pool).await.expect("introspect");
+            let mut collector = ProfileCollector::new(&pool, schema, ProfileOptions::default())
+                .await.expect("collector");
+            let profile = collector.collect().await.expect("collect");
+            let scenario = ProfileApplicator::new(profile, 1.0)
+                .expect("scale valid").to_scenario().expect("scenario");
+
+            let cfg = GenerateConfig {
+                seed,
+                scenario: Some(scenario),
+                include_tables: Some(vec!["users".into()]),
+                truncate_first: true,
+                ..GenerateConfig::default()
+            };
+
+            generate(&pool, &cfg).await.expect("generate 1");
+            let r1 = sqlx::query_as("SELECT id, name FROM users ORDER BY id")
+                .fetch_all(&pool).await.expect("query 1");
+            generate(&pool, &cfg).await.expect("generate 2");
+            let r2 = sqlx::query_as("SELECT id, name FROM users ORDER BY id")
+                .fetch_all(&pool).await.expect("query 2");
+            (r1, r2)
+        });
+
+        prop_assert_eq!(first, second, "profile generation not deterministic (seed={})", seed);
     }
 }

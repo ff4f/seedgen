@@ -6,6 +6,7 @@ pub mod introspection;
 pub mod lifecycle;
 pub mod mcp;
 pub mod output;
+pub mod profile;
 pub mod resolver;
 pub mod scenario;
 pub mod semantic;

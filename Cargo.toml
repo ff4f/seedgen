@@ -1,6 +1,6 @@
 [package]
 name = "seedgen"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.88"
 license = "MIT"
@@ -30,6 +30,7 @@ indicatif = "0.17"
 thiserror = "2"
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+sha2 = "0.10"
 
 [dev-dependencies]
 insta = { version = "1", features = ["yaml"] }
@@ -68,6 +69,10 @@ path = "tests/integration/property_tests.rs"
 [[test]]
 name = "lifecycle"
 path = "tests/integration/lifecycle_tests.rs"
+
+[[test]]
+name = "profile"
+path = "tests/integration/profile_test.rs"
 
 [[bench]]
 name = "generate_bench"

@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod generate;
 pub mod introspect;
+pub mod profile;
 pub mod reset;
 
 use clap::{CommandFactory, Parser};
@@ -46,6 +47,8 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             include,
             exclude,
             truncate_first,
+            profile,
+            scale,
         } => {
             // Dry-run doesn't need a URL — we report the plan without connecting.
             if !dry_run {
@@ -67,6 +70,45 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
                     include,
                     exclude,
                     truncate_first,
+                    profile,
+                    scale,
+                },
+                &url,
+            )
+            .await
+        }
+        Commands::Profile {
+            output,
+            format,
+            cardinality_threshold,
+            exclude,
+            include,
+            strict_security,
+            no_hourly,
+            no_monthly,
+            dry_run_queries,
+            export_queries,
+            import_results,
+        } => {
+            // Offline import needs no database connection.
+            let url = if import_results.is_some() {
+                String::new()
+            } else {
+                require_url(cli.url)?
+            };
+            profile::run(
+                profile::Args {
+                    output,
+                    format,
+                    cardinality_threshold,
+                    exclude,
+                    include,
+                    strict_security,
+                    no_hourly,
+                    no_monthly,
+                    dry_run_queries,
+                    export_queries,
+                    import_results,
                 },
                 &url,
             )
