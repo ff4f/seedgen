@@ -354,6 +354,10 @@ impl LifecycleEngine {
 
                 // 3. Generate the bucket's new rows via the EXISTING core.
                 let prev_len = generated_ids.get(table_name).map(|v| v.len()).unwrap_or(0);
+                // The lifecycle engine builds per-bucket overrides (see
+                // `build_bucket_config`) but does not yet apply them through the
+                // generation core — doing so would change existing output. Pass
+                // none to preserve current behavior.
                 let outcome = generate_table(
                     pool,
                     schema,
@@ -363,6 +367,7 @@ impl LifecycleEngine {
                     &mut rng,
                     &mut generated_ids,
                     &mut unique_states,
+                    &HashMap::new(),
                     &base_config.output_mode,
                 )
                 .await?;

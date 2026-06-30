@@ -8,6 +8,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 Nothing yet.
 
+## [0.3.0] - 2026-06-30
+
+Production statistics profiling: read aggregate statistics from a production (or
+staging) database — never a single row — and use them to generate synthetic seed
+data shaped like production. An additive `src/profile/` module converts a captured
+profile into scenario overrides that the existing generation engine runs; core
+introspection, resolver, semantic, and output modules are unchanged.
+
+### Added
+
+- **Production statistics profiling (`seedgen profile`)** — reads only aggregate
+  statistics (row counts, categorical distributions, numeric min/max/mean/stddev/
+  percentiles, null rates, boolean rates, string cardinality, timestamp ranges and
+  density, FK parent→child ratios) into a versioned YAML/JSON profile. Zero
+  row-level data is captured.
+- **Six-layer security model** — (1) query whitelist (aggregate-only, built from
+  templates, never `SELECT *` / DML), (2) cardinality guard (individual values
+  captured only below a configurable threshold, default 50), (3) sensitive-column
+  detection (24 patterns: `password`, `ssn`, `credit_card`, `token`, …; overridable
+  with `--include`), (4) dry-run + audit log (`--dry-run-queries`,
+  `.seedgen-profile-audit.log`), (5) offline mode, (6) connection safety (read-only
+  transaction, statement timeout, superuser warning / `--strict-security`).
+- **Generate from a profile** — `seedgen generate --profile <file> --scale <factor>`
+  converts a profile to scenario overrides (categorical → `distribution`, numeric →
+  `range`, FK ratios → `per_parent`) and runs the existing engine.
+- **Scale factor** — `--scale` (0 < scale ≤ 1) shrinks root-table row counts while
+  child tables follow their parents, preserving every table ratio at any scale.
+- **Profile compliance validation** — after profile-based generation, prints a
+  `✓`/`✗` report comparing generated data to the profile (distribution drift, null
+  rate, FK ratio, boolean rate) within a tolerance.
+- **Offline profiling mode** — `--export-queries` emits a single self-describing,
+  read-only collection query; a DBA runs it and `--import-results` rebuilds the
+  profile with no database connection. Distribution sub-queries are self-guarded,
+  so high-cardinality values never leave the database even offline.
+- **Audit logging** — every executed query and skipped column is recorded with a
+  timestamp, aggregate-only result summary, and reason; written to
+  `.seedgen-profile-audit.log`.
+
+### Changed
+
+- The generation engine (`generate_table`) now honors per-column
+  `distribution` / `range` overrides in the standard flow (weighted sampling with
+  deterministic ordering). The empty-override path is byte-for-byte identical to
+  v0.2.x, so existing scenarios, snapshots, and the lifecycle engine are unaffected.
+
+### Dependencies
+
+- Added `sha2` for the profile's content hash (table + column names only, no data).
+
 ## [0.2.0] - 2026-06-11
 
 Lifecycle simulation (time-travel generation): an additive, opt-in layer that

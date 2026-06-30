@@ -182,6 +182,48 @@ shows an adoption curve, December outsells July, churned users stop ordering, an
 no child row is ever timestamped before its parent. Same seed still gives the
 same data.
 
+## Production statistics profiling
+
+Faker data has the wrong *shape*: every status equally likely, prices uniformly
+random, no nulls where production has 40%. **Profiling** fixes that without ever
+copying a row. `seedgen profile` reads only aggregate statistics from a
+production (or staging) database — counts, distributions, numeric ranges, null
+rates, FK ratios — and writes them to a YAML profile. Then `generate --profile`
+produces seed data shaped like production but fully synthetic and deterministic.
+
+```bash
+# Read statistics from a read-only replica (zero row-level data leaves the DB)
+seedgen profile --url postgres://readonly@prod-replica/myapp --output prod-profile.yaml
+
+# Generate 1% of production size, deterministically, shaped like production
+seedgen generate --url $DEV_URL --profile prod-profile.yaml --scale 0.01 --seed 42
+```
+
+Nothing but aggregate numbers ever leaves the source database, enforced by a
+six-layer security model:
+
+- **Query whitelist** — only `COUNT`/`MIN`/`MAX`/`AVG`/`STDDEV`/`PERCENTILE`/low-cardinality `GROUP BY`; never `SELECT *`, never row-level reads, never writes.
+- **Cardinality guard** — value distributions are captured only for low-cardinality (enum-like) columns; a 48k-distinct `email` column yields a count, never addresses.
+- **Sensitive detection** — `password`, `ssn`, `credit_card`, `token`, … are auto-skipped (overridable with `--include`).
+- **Dry-run & audit** — `--dry-run-queries` prints every query first; each run writes `.seedgen-profile-audit.log`.
+- **Offline mode** — for fully air-gapped production: export one read-only query, have a DBA run it, import the result. SeedGen never connects to prod.
+- **Connection safety** — read-only transaction + statement timeout; warns on superuser.
+
+```bash
+# Review the exact queries before running anything
+seedgen profile --url $PROD_URL --dry-run-queries
+
+# Offline / air-gapped: export → DBA runs it → import (SeedGen never touches prod)
+seedgen profile --url $PROD_URL --export-queries > collect.sql
+psql "$PROD_URL" -At -f collect.sql -o results.json
+seedgen profile --import-results results.json --output prod-profile.yaml
+```
+
+After profile-based generation, SeedGen prints a compliance report comparing the
+generated data back to the profile (distributions, ratios, null rates) with a
+`✓`/`✗` per check. The `--scale` factor preserves proportions: shrink the row
+count and every table ratio stays intact.
+
 ## GitHub Action
 
 There's a composite action that grabs the binary and runs `generate` for you. Drop it into a workflow before your integration tests:
@@ -239,7 +281,7 @@ PostgreSQL 12 through 17 is the only stable target right now. CI runs against al
 
 ## Status
 
-Currently v0.2.0. PostgreSQL works end-to-end, and lifecycle simulation landed in this release.
+Currently v0.3.0. PostgreSQL works end-to-end; production statistics profiling landed in this release.
 
 | Capability | Status |
 |---|:--:|
@@ -247,7 +289,8 @@ Currently v0.2.0. PostgreSQL works end-to-end, and lifecycle simulation landed i
 | Determinism / FK / NOT NULL / UNIQUE invariants | ✅ |
 | Direct INSERT + SQL file output | ✅ |
 | Scenario files (counts, distributions, templates) | ✅ |
-| **Lifecycle simulation (growth, churn, seasonality, temporal)** | ✅ |
+| Lifecycle simulation (growth, churn, seasonality, temporal) | ✅ |
+| **Production statistics profiling (`profile`, scale, offline, compliance)** | ✅ |
 | MCP server (stdio) | ✅ |
 | COPY protocol output (`--fast`) | ⬜ |
 | JSON output | ⬜ |
